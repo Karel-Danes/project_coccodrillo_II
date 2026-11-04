@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseLevel } from './level';
+import { blocksDamage } from './player';
 import { Simulation } from './simulation';
 import type { PickupSpawn } from './types';
 
@@ -71,5 +72,21 @@ describe('pickups', () => {
         (event) => event.type === 'pickupCollected' && event.kind === 'well',
       ),
     ).toBe(true);
+  });
+
+  it('unlocks guard when the artefact is collected', () => {
+    const simulation = new Simulation(
+      levelWith([{ kind: 'artifact', x: 200, y: 40 }]),
+    );
+
+    simulation.step();
+    expect(simulation.state.player.guardUnlocked).toBe(true);
+    expect(simulation.state.pickups[0]?.collected).toBe(true);
+
+    simulation.setInput({ ...IDLE, guardHeld: true });
+    simulation.step();
+
+    expect(simulation.state.player.state).toBe('guard');
+    expect(blocksDamage(simulation.state.player)).toBe(true);
   });
 });

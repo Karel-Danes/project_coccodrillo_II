@@ -40,6 +40,9 @@ export function publishEvents(
       case 'bossIntro':
         bus.emit('bossIntro', event.kind);
         break;
+      case 'bossShot':
+        bus.emit('bossShot');
+        break;
       case 'bossDefeated':
         bus.emit('bossDefeated');
         break;

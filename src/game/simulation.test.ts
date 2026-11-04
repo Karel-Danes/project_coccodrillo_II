@@ -147,6 +147,7 @@ describe('Simulation', () => {
       simulation.step();
     }
 
+    simulation.state.player.guardUnlocked = true;
     simulation.setInput(input({ guardHeld: true }));
     simulation.step();
     const guarding = simulation.state.player;

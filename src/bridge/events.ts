@@ -27,6 +27,8 @@ export type GameEvents = {
   pickupCollected: (kind: PickupKind, hp: number, coins: number) => void;
   /** The golem has seen the player; run the intro cutscene. */
   bossIntro: (kind: 'golem') => void;
+  /** The golem fired an orb. */
+  bossShot: () => void;
   /** The golem has been defeated. */
   bossDefeated: () => void;
 };

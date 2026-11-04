@@ -65,7 +65,7 @@ export type Enemy = {
   attackCooldown: number;
 };
 
-export type PickupKind = 'heart' | 'coin' | 'well';
+export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact';
 
 export type PickupSpawn = {
   kind: PickupKind;
@@ -106,6 +106,15 @@ export type Player = {
   maxHp: number;
   /** Seconds of remaining post-hit invulnerability. */
   invulnerableTime: number;
+  /** The guard skill is found as an artefact before the boss. */
+  guardUnlocked: boolean;
+};
+
+export type Projectile = {
+  position: Vec2;
+  velocity: Vec2;
+  /** Seconds before the orb fizzles out. */
+  lifetime: number;
 };
 
 export type InputState = {
@@ -125,5 +134,6 @@ export type GameState = {
   deathReason: DeathReason | null;
   enemies: readonly Enemy[];
   pickups: readonly Pickup[];
+  projectiles: readonly Projectile[];
   coins: number;
 };

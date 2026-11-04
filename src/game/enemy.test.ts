@@ -168,6 +168,7 @@ describe('skeleton', () => {
       skeletonAt(300, 220, 340),
     ]);
     const simulation = new Simulation(level);
+    simulation.state.player.guardUnlocked = true;
     simulation.setInput({ ...NO_INPUT, guardHeld: true });
 
     for (let i = 0; i < 240; i += 1) {

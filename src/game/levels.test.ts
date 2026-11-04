@@ -60,10 +60,13 @@ describe('world 01', () => {
     expect(LEVEL_01.pickups.length).toBeGreaterThan(15);
     expect(
       LEVEL_01.pickups.filter((pickup) => pickup.kind === 'well'),
-    ).toHaveLength(4);
+    ).toHaveLength(2);
     expect(
-      LEVEL_01.pickups.filter((pickup) => pickup.kind === 'heart').length,
-    ).toBeGreaterThan(2);
+      LEVEL_01.pickups.filter((pickup) => pickup.kind === 'heart'),
+    ).toHaveLength(2);
+    expect(
+      LEVEL_01.pickups.filter((pickup) => pickup.kind === 'artifact'),
+    ).toHaveLength(1);
 
     for (const enemy of LEVEL_01.enemies) {
       const groundTile =

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { parseLevel } from './level';
 import { Simulation } from './simulation';
-import type { EnemySpawn, Level } from './types';
+import type { EnemySpawn, InputState, Level } from './types';
+
+const NO_INPUT: InputState = {
+  left: false,
+  right: false,
+  jumpHeld: false,
+  attackHeld: false,
+  guardHeld: false,
+};
 
 function arenaLevel(): Level {
   return parseLevel(
@@ -22,6 +30,31 @@ function arenaLevel(): Level {
           y: 120,
           patrolMinX: 280,
           patrolMaxX: 330,
+        } satisfies EnemySpawn,
+      ],
+    },
+  );
+}
+
+function rangedArenaLevel(): Level {
+  return parseLevel(
+    [
+      '.'.repeat(20),
+      '.'.repeat(20),
+      '.'.repeat(20),
+      '.'.repeat(20),
+      '#'.repeat(20),
+    ],
+    {
+      tileSize: 64,
+      spawn: { x: 200, y: 168 },
+      enemies: [
+        {
+          kind: 'golem',
+          x: 650,
+          y: 120,
+          patrolMinX: 640,
+          patrolMaxX: 700,
         } satisfies EnemySpawn,
       ],
     },
@@ -80,5 +113,56 @@ describe('golem boss', () => {
       events.some((event) => event.type === 'bossDefeated'),
     ).toBe(true);
     expect(simulation.step()).toHaveLength(0);
+  });
+
+  it('fires a projectile after the intro', () => {
+    const simulation = new Simulation(rangedArenaLevel());
+    simulation.step();
+    simulation.resumeFromCutscene();
+
+    let sawShot = false;
+    for (
+      let i = 0;
+      i < 160 && simulation.state.mode === 'play';
+      i += 1
+    ) {
+      const events = simulation.step();
+      if (events.some((event) => event.type === 'bossShot')) {
+        sawShot = true;
+        break;
+      }
+    }
+
+    expect(sawShot).toBe(true);
+    expect(simulation.state.projectiles.length).toBeGreaterThan(0);
+  });
+
+  it('lets an unlocked guard block golem orbs', () => {
+    const simulation = new Simulation(rangedArenaLevel());
+    simulation.step();
+    simulation.resumeFromCutscene();
+    simulation.state.player.guardUnlocked = true;
+    simulation.setInput({ ...NO_INPUT, guardHeld: true });
+
+    let sawShot = false;
+    let sawBlocked = false;
+    for (
+      let i = 0;
+      i < 200 && simulation.state.mode === 'play';
+      i += 1
+    ) {
+      const events = simulation.step();
+      if (events.some((event) => event.type === 'bossShot')) {
+        sawShot = true;
+      }
+      if (events.some((event) => event.type === 'attackBlocked')) {
+        sawBlocked = true;
+      }
+    }
+
+    expect(sawShot).toBe(true);
+    expect(sawBlocked).toBe(true);
+    expect(simulation.state.player.hp).toBe(3);
+    expect(simulation.state.status).toBe('playing');
   });
 });

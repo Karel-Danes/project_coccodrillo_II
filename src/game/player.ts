@@ -58,6 +58,7 @@ export function createPlayer(spawn: Vec2): Player {
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
     invulnerableTime: 0,
+    guardUnlocked: false,
   };
 }
 
@@ -119,8 +120,8 @@ function horizontalIntent(input: InputState): -1 | 0 | 1 {
 }
 
 /** Which state to settle into when standing on the ground. */
-function groundStateFor(input: InputState): PlayerState {
-  if (input.guardHeld) {
+function groundStateFor(input: InputState, guardUnlocked: boolean): PlayerState {
+  if (guardUnlocked && input.guardHeld) {
     return 'guard';
   }
   return horizontalIntent(input) !== 0 ? 'walk' : 'idle';
@@ -162,7 +163,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
 
     if (stateTime >= PLAYER_HURT_DURATION) {
       if (player.grounded) {
-        state = groundStateFor(input);
+        state = groundStateFor(input, player.guardUnlocked);
         stateTime = 0;
         vx = groundVelocityFor(state, input);
       } else {
@@ -180,7 +181,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
         if (direction !== 0) {
           facing = direction;
         }
-        state = groundStateFor(input);
+        state = groundStateFor(input, player.guardUnlocked);
         stateTime = 0;
         vx = groundVelocityFor(state, input);
       } else {
@@ -200,8 +201,8 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
       // Striking out of a guard is allowed; the swing is committed.
       state = 'attack';
       stateTime = 0;
-    } else if (!input.guardHeld) {
-      state = groundStateFor(input);
+    } else if (!input.guardHeld || !player.guardUnlocked) {
+      state = groundStateFor(input, player.guardUnlocked);
       stateTime = 0;
       vx = groundVelocityFor(state, input);
     } else {
@@ -217,7 +218,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
       state = 'attack';
       stateTime = 0;
       vx = 0;
-    } else if (input.guardHeld) {
+    } else if (input.guardHeld && player.guardUnlocked) {
       state = 'guard';
       stateTime = 0;
       vx = 0;
@@ -279,7 +280,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     if (direction !== 0) {
       facing = direction;
     }
-    finalState = groundStateFor(input);
+    finalState = groundStateFor(input, player.guardUnlocked);
     finalTime = 0;
   }
 
@@ -293,6 +294,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     hp: player.hp,
     maxHp: player.maxHp,
     invulnerableTime,
+    guardUnlocked: player.guardUnlocked,
   };
 }
 
@@ -332,7 +334,7 @@ export function getAttackHitbox(player: Player): AABB | null {
 
 /** Guard negates incoming damage; enemies can call this before applying it. */
 export function blocksDamage(player: Player): boolean {
-  return player.state === 'guard';
+  return player.guardUnlocked && player.state === 'guard';
 }
 
 /** True when any part of the player overlaps a deadly tile. */

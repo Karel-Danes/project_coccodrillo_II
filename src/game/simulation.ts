@@ -11,6 +11,11 @@ import { FIXED_DT_SECONDS } from './loop';
 import { overlaps } from './physics';
 import { pickupBounds } from './pickup';
 import {
+  createGolemProjectile,
+  projectileBounds,
+  stepProjectile,
+} from './projectile';
+import {
   applyPlayerDamage,
   blocksDamage,
   createPlayer,
@@ -34,6 +39,7 @@ import type {
   Pickup,
   PickupKind,
   Player,
+  Projectile,
 } from './types';
 
 export type GameEvent =
@@ -50,6 +56,7 @@ export type GameEvent =
       coins: number;
     }
   | { type: 'bossIntro'; kind: 'golem' }
+  | { type: 'bossShot' }
   | { type: 'bossDefeated' };
 
 const NO_EVENTS: readonly GameEvent[] = [];
@@ -73,11 +80,13 @@ export class Simulation {
   private player: Player;
   private enemies: Enemy[];
   private pickups: Pickup[];
+  private projectiles: Projectile[] = [];
   private coins = 0;
   private status: GameStatus = 'playing';
   private mode: GameMode = 'play';
   private deathReason: DeathReason | null = null;
   private bossIntroShown = false;
+  private bossShotCooldown = 1.5;
 
   private input: InputState = {
     left: false,
@@ -111,6 +120,7 @@ export class Simulation {
       deathReason: this.deathReason,
       enemies: this.enemies,
       pickups: this.pickups,
+      projectiles: this.projectiles,
       coins: this.coins,
     };
   }
@@ -195,6 +205,18 @@ export class Simulation {
         events.push({
           type: 'pickupCollected',
           kind: 'coin',
+          hp: player.hp,
+          coins: this.coins,
+        });
+        continue;
+      }
+
+      if (pickup.kind === 'artifact') {
+        pickup.collected = true;
+        player = { ...player, guardUnlocked: true };
+        events.push({
+          type: 'pickupCollected',
+          kind: 'artifact',
           hp: player.hp,
           coins: this.coins,
         });
@@ -304,6 +326,60 @@ export class Simulation {
         }
       }
     }
+
+    // Zatka's ranged attack, then existing orbs advance and resolve.
+    this.bossShotCooldown = Math.max(
+      0,
+      this.bossShotCooldown - FIXED_DT_SECONDS,
+    );
+    const golem = this.enemies.find(
+      (enemy) => enemy.kind === 'golem' && enemy.state !== 'die',
+    );
+    if (this.bossIntroShown && golem && player.state !== 'die') {
+      const golemStats = statsFor('golem');
+      const gx = golem.position.x + golemStats.width / 2;
+      const gy = golem.position.y + golemStats.height * 0.55;
+      const px = player.position.x + PLAYER_WIDTH / 2;
+      const py = player.position.y + PLAYER_HEIGHT * 0.55;
+
+      if (this.bossShotCooldown <= 0 && Math.abs(px - gx) < 1000) {
+        this.projectiles.push(
+          createGolemProjectile({ x: gx, y: gy }, { x: px, y: py }),
+        );
+        this.bossShotCooldown = 2.4;
+        events.push({ type: 'bossShot' });
+      }
+    }
+
+    const nextProjectiles: Projectile[] = [];
+    for (const projectile of this.projectiles) {
+      const moved = stepProjectile(projectile, this.level, FIXED_DT_SECONDS);
+      if (!moved) {
+        continue;
+      }
+
+      if (!overlaps(projectileBounds(moved), playerBox)) {
+        nextProjectiles.push(moved);
+        continue;
+      }
+
+      if (blocksDamage(player)) {
+        events.push({ type: 'attackBlocked' });
+        continue;
+      }
+
+      if (player.invulnerableTime <= 0) {
+        const hpBefore = player.hp;
+        player = applyPlayerDamage(player, 1, moved.position.x);
+        if (player.state === 'die') {
+          this.status = 'dead';
+          this.deathReason = 'sword';
+        } else if (player.hp < hpBefore) {
+          events.push({ type: 'playerHurt', hp: player.hp });
+        }
+      }
+    }
+    this.projectiles = nextProjectiles;
 
     // Enemy attacks: guard negates them, i-frames absorb them, otherwise
     // they cost health. Only zero health is fatal.

@@ -304,9 +304,28 @@ describe('sword and guard', () => {
     expect(player.velocity.x).toBeCloseTo(WALK_SPEED);
   });
 
+  it('cannot guard until the artefact unlocks the skill', () => {
+    const level = flatLevel();
+    const locked = step(settle(level), level, GUARD);
+    expect(locked.state).toBe('idle');
+    expect(blocksDamage(locked)).toBe(false);
+
+    const unlocked = step(
+      { ...settle(level), guardUnlocked: true },
+      level,
+      GUARD,
+    );
+    expect(unlocked.state).toBe('guard');
+    expect(blocksDamage(unlocked)).toBe(true);
+  });
+
   it('holds guard without moving and blocks damage', () => {
     const level = flatLevel();
-    const guarding = step(settle(level), level, GUARD);
+    const guarding = step(
+      { ...settle(level), guardUnlocked: true },
+      level,
+      GUARD,
+    );
     expect(guarding.state).toBe('guard');
     expect(blocksDamage(guarding)).toBe(true);
 
@@ -334,7 +353,11 @@ describe('sword and guard', () => {
 
   it('can strike out of guard but cannot guard in the air', () => {
     const level = flatLevel();
-    const guarding = step(settle(level), level, GUARD);
+    const guarding = step(
+      { ...settle(level), guardUnlocked: true },
+      level,
+      GUARD,
+    );
     const attacking = step(guarding, level, GUARD, false, true);
     expect(attacking.state).toBe('attack');
 
@@ -346,7 +369,11 @@ describe('sword and guard', () => {
 
   it('returns to guard after a swing when guard is still held', () => {
     const level = flatLevel();
-    let player = step(settle(level), level, GUARD);
+    let player = step(
+      { ...settle(level), guardUnlocked: true },
+      level,
+      GUARD,
+    );
     player = step(player, level, GUARD, false, true);
 
     for (let i = 0; i < 60 && player.state === 'attack'; i += 1) {

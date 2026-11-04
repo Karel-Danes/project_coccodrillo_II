@@ -25,6 +25,7 @@ import type {
   PickupKind,
   Player,
   PlayerState,
+  Projectile,
 } from '../../game/types';
 import {
   ENEMY_ART,
@@ -45,7 +46,7 @@ import {
 import { loadKnightAssets, registerKnightAnimations } from '../knightAnimations';
 import { loadPickupAssets, registerPickupAnimations } from '../pickups';
 import { Sfx } from '../sfx';
-import { createTerrainTexture } from '../terrain';
+import { createTerrainTexture, loadTerrainAssets } from '../terrain';
 import { TouchControls } from '../TouchControls';
 
 const COLORS = {
@@ -72,6 +73,7 @@ type EnemyView = {
 type PickupView = {
   sprite: Phaser.GameObjects.Sprite;
   base?: Phaser.GameObjects.Graphics;
+  glow?: Phaser.GameObjects.Image;
   kind: PickupKind;
   phase: number;
 };
@@ -122,6 +124,10 @@ export class GameScene extends Phaser.Scene {
   private pickupViews: PickupView[] = [];
   private heartHud: Phaser.GameObjects.Image[] = [];
   private coinText!: Phaser.GameObjects.Text;
+  private guardBadge!: Phaser.GameObjects.Image;
+  private guardLabel!: Phaser.GameObjects.Text;
+  private bannerText: Phaser.GameObjects.Text | null = null;
+  private projectileViews: Phaser.GameObjects.Image[] = [];
 
   private guardFx!: Phaser.GameObjects.Graphics;
   private attackFx!: Phaser.GameObjects.Graphics;
@@ -161,6 +167,7 @@ export class GameScene extends Phaser.Scene {
     loadEnemyAssets(this);
     loadPickupAssets(this);
     loadDesertAssets(this);
+    loadTerrainAssets(this);
   }
 
   create(): void {
@@ -223,55 +230,113 @@ export class GameScene extends Phaser.Scene {
     this.attackFx = this.add.graphics().setDepth(11);
     this.enemyHud = this.add.graphics().setDepth(12);
 
-    this.pickupViews = this.simulation.state.pickups.map((pickup, index) => {
-      const isCoin = pickup.kind === 'coin';
-      const texture = isCoin
-        ? (COIN_KEYS[0] ?? 'pickup-coin-0')
-        : (HEART_KEYS[0] ?? 'pickup-heart-0');
-      const sprite = this.add
-        .sprite(pickup.position.x, pickup.position.y, texture)
-        .setDepth(4)
-        .setScale(isCoin ? 0.8 : 0.95);
-      sprite.play(isCoin ? 'coin-spin' : 'heart-pulse');
+    this.createGlowTexture();
+    this.createGuardArtifactTexture();
+    this.createWellOrbTexture();
 
+    this.pickupViews = this.simulation.state.pickups.map((pickup, index) => {
+      let texture = HEART_KEYS[0] ?? 'pickup-heart-0';
+      let scale = 1.4;
       let base: Phaser.GameObjects.Graphics | undefined;
-      if (pickup.kind === 'well') {
-        const x = pickup.position.x;
-        const y = pickup.position.y + 28;
-        base = this.add.graphics().setDepth(2);
-        base.fillStyle(0x161d29, 0.95).fillEllipse(x, y, 86, 28);
-        base.lineStyle(3, 0x6f7f9c, 0.9).strokeEllipse(x, y, 86, 28);
-        base.fillStyle(0x3e6472, 0.7).fillEllipse(x, y - 5, 58, 12);
+      let glow: Phaser.GameObjects.Image | undefined;
+
+      if (pickup.kind === 'coin') {
+        texture = COIN_KEYS[0] ?? 'pickup-coin-0';
+        scale = 1.2;
+      } else if (pickup.kind === 'well') {
+        texture = 'well-orb';
+        scale = 1.3;
+      } else if (pickup.kind === 'artifact') {
+        texture = 'guard-artifact';
+        scale = 1.2;
       }
 
-      return { sprite, base, kind: pickup.kind, phase: index * 0.7 };
+      const sprite = this.add
+        .sprite(pickup.position.x, pickup.position.y, texture)
+        .setDepth(5)
+        .setScale(scale);
+
+      if (pickup.kind === 'coin') {
+        sprite.play('coin-spin');
+      } else if (pickup.kind === 'heart') {
+        sprite.play('heart-pulse');
+      } else if (pickup.kind === 'well') {
+        sprite.setBlendMode(Phaser.BlendModes.ADD);
+      }
+
+      if (pickup.kind === 'well' || pickup.kind === 'artifact') {
+        const x = pickup.position.x;
+        const artifact = pickup.kind === 'artifact';
+        const y = pickup.position.y + (artifact ? 44 : 34);
+        base = this.add.graphics().setDepth(2);
+        base.fillStyle(0x161d29, 0.95).fillEllipse(x, y, 86, 28);
+        base
+          .lineStyle(3, artifact ? 0xd8b46a : 0x6f7f9c, 0.9)
+          .strokeEllipse(x, y, 86, 28);
+        base
+          .fillStyle(artifact ? 0x4a6c7a : 0x3e6472, 0.7)
+          .fillEllipse(x, y - 5, 58, 12);
+
+        if (artifact) {
+          glow = this.add
+            .image(x, pickup.position.y, 'boss-glow')
+            .setDepth(3)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setScale(0.18)
+            .setAlpha(0.55);
+        }
+      }
+
+      return {
+        sprite,
+        base,
+        glow,
+        kind: pickup.kind,
+        phase: index * 0.7,
+      };
     });
 
     this.heartHud = [];
     for (let i = 0; i < PLAYER_MAX_HP; i += 1) {
       this.heartHud.push(
         this.add
-          .image(32 + i * 42, 146, HEART_KEYS[0] ?? 'pickup-heart-0')
+          .image(34 + i * 50, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
           .setScrollFactor(0)
           .setDepth(22)
-          .setScale(0.85),
+          .setScale(1),
       );
     }
 
     this.add
-      .sprite(32, 190, COIN_KEYS[0] ?? 'pickup-coin-0')
+      .sprite(34, 204, COIN_KEYS[0] ?? 'pickup-coin-0')
       .setScrollFactor(0)
       .setDepth(22)
-      .setScale(0.7)
+      .setScale(0.9)
       .play('coin-spin');
     this.coinText = this.add
-      .text(54, 176, 'x 0', {
+      .text(58, 190, 'x 0', {
         fontFamily: 'monospace',
-        fontSize: '20px',
+        fontSize: '22px',
         color: '#f0d68a',
       })
       .setScrollFactor(0)
       .setDepth(22);
+
+    this.guardBadge = this.add
+      .image(34, 250, 'guard-artifact')
+      .setScrollFactor(0)
+      .setDepth(22)
+      .setScale(0.5)
+      .setAlpha(0.2);
+    this.guardLabel = this.add
+      .text(58, 238, 'GUARD', {
+        fontFamily: 'monospace',
+        fontSize: '15px',
+        color: '#d8b46a',
+      })
+      .setScrollFactor(0)
+      .setDepth(22)
+      .setAlpha(0.25);
 
     this.cameraFocus = this.add.zone(0, 0, 1, 1);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
@@ -394,6 +459,7 @@ export class GameScene extends Phaser.Scene {
     this.bus.on('attackBlocked', this.onAttackBlocked, this);
     this.bus.on('pickupCollected', this.onPickupCollected, this);
     this.bus.on('bossIntro', this.startBossCutscene, this);
+    this.bus.on('bossShot', this.onBossShot, this);
     this.bus.on('bossDefeated', this.onBossDefeated, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -404,6 +470,7 @@ export class GameScene extends Phaser.Scene {
       this.bus.off('attackBlocked', this.onAttackBlocked, this);
       this.bus.off('pickupCollected', this.onPickupCollected, this);
       this.bus.off('bossIntro', this.startBossCutscene, this);
+      this.bus.off('bossShot', this.onBossShot, this);
       this.bus.off('bossDefeated', this.onBossDefeated, this);
       keyboard.off('keydown', this.unlockAudio, this);
       this.input.off('pointerdown', this.unlockAudio, this);
@@ -476,9 +543,55 @@ export class GameScene extends Phaser.Scene {
   private onPickupCollected(kind: PickupKind): void {
     if (kind === 'coin') {
       this.sfx.coin();
+    } else if (kind === 'artifact') {
+      this.sfx.heal();
+      this.showBanner('GUARD UNLOCKED');
     } else {
       this.sfx.heal();
     }
+  }
+
+  private onBossShot(): void {
+    this.sfx.bossShot();
+  }
+
+  private showBanner(message: string): void {
+    this.bannerText?.destroy();
+    const text = this.add
+      .text(this.scale.width / 2, this.scale.height * 0.3, message, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '27px',
+        color: '#f3dfa2',
+        stroke: '#1a1208',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(24)
+      .setAlpha(0);
+    this.bannerText = text;
+
+    this.tweens.add({
+      targets: text,
+      alpha: 1,
+      y: text.y - 16,
+      duration: 350,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          alpha: 0,
+          delay: 1400,
+          duration: 500,
+          onComplete: () => {
+            text.destroy();
+            if (this.bannerText === text) {
+              this.bannerText = null;
+            }
+          },
+        });
+      },
+    });
   }
 
   private onEnemyDied(kind: EnemyKind): void {
@@ -726,9 +839,22 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const view of this.pickupViews) {
-      view.sprite.setVisible(true).setAlpha(1);
+      view.sprite.setVisible(true).setAlpha(1).setAngle(0);
       view.base?.setAlpha(1);
+      view.glow?.setVisible(true).setAlpha(0.55);
+      const scales = {
+        heart: 1.4,
+        coin: 1.2,
+        well: 1.3,
+        artifact: 1.2,
+      } as const;
+      view.sprite.setScale(scales[view.kind]);
     }
+    for (const view of this.projectileViews) {
+      view.setVisible(false);
+    }
+    this.bannerText?.destroy();
+    this.bannerText = null;
     this.playerSprite.setAlpha(1);
 
     this.cameras.main.zoomEffect.reset();
@@ -748,11 +874,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private render(): void {
-    const { player, enemies, pickups, mode } = this.simulation.state;
+    const { player, enemies, pickups, projectiles, mode } =
+      this.simulation.state;
 
     this.renderPlayer(player);
     this.renderEnemies(enemies);
     this.renderPickups(pickups);
+    this.renderProjectiles(projectiles);
     this.renderHud();
     this.renderCombatFx(player, enemies);
     this.renderBossBar(player, enemies);
@@ -807,18 +935,64 @@ export class GameScene extends Phaser.Scene {
 
       if (pickup.collected) {
         view.sprite.setVisible(false);
+        view.glow?.setVisible(false);
         view.base?.setAlpha(0.25);
         return;
       }
 
       view.sprite.setVisible(true);
+      view.glow?.setVisible(true);
       view.sprite.setPosition(
         pickup.position.x,
         pickup.position.y +
           Math.sin(this.time.now / 420 + view.phase) * 4,
       );
+
+      if (view.kind === 'artifact') {
+        view.sprite.setAngle(
+          Math.sin(this.time.now / 500 + view.phase) * 6,
+        );
+        if (view.glow) {
+          view.glow.setAlpha(
+            0.45 + Math.sin(this.time.now / 260) * 0.12,
+          );
+        }
+      } else if (view.kind === 'well') {
+        view.sprite.setScale(
+          1.3 + Math.sin(this.time.now / 280 + view.phase) * 0.06,
+        );
+      }
+
       view.base?.setAlpha(1);
     });
+  }
+
+  private renderProjectiles(projectiles: readonly Projectile[]): void {
+    projectiles.forEach((projectile, index) => {
+      let view = this.projectileViews[index];
+      if (!view) {
+        view = this.add
+          .image(projectile.position.x, projectile.position.y, 'boss-glow')
+          .setDepth(12)
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setScale(0.1);
+        this.projectileViews.push(view);
+      }
+
+      view.setVisible(true);
+      view.setPosition(projectile.position.x, projectile.position.y);
+      view.setScale(
+        0.1 + Math.sin(this.time.now / 110 + index) * 0.012,
+      );
+    });
+
+    for (
+      let index = projectiles.length;
+      index < this.projectileViews.length;
+      index += 1
+    ) {
+      this.projectileViews[index]?.setVisible(false);
+    }
   }
 
   private renderHud(): void {
@@ -835,6 +1009,9 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.coinText.setText(`x ${coins}`);
+
+    this.guardBadge.setAlpha(player.guardUnlocked ? 1 : 0.2);
+    this.guardLabel.setAlpha(player.guardUnlocked ? 1 : 0.25);
   }
 
   private renderEnemies(enemies: readonly Enemy[]): void {
@@ -1010,6 +1187,87 @@ export class GameScene extends Phaser.Scene {
       }
       this.lastEnemyStates[index] = enemy.state;
     });
+  }
+
+  private createWellOrbTexture(): void {
+    if (this.textures.exists('well-orb')) {
+      return;
+    }
+
+    const size = 64;
+    const canvas = this.textures.createCanvas('well-orb', size, size);
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext();
+    const gradient = context.createRadialGradient(
+      size / 2,
+      size / 2,
+      2,
+      size / 2,
+      size / 2,
+      size / 2 - 2,
+    );
+    gradient.addColorStop(0, 'rgba(235, 255, 255, 1)');
+    gradient.addColorStop(0.35, 'rgba(100, 220, 255, 0.85)');
+    gradient.addColorStop(1, 'rgba(40, 120, 255, 0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    canvas.refresh();
+  }
+
+  private createGuardArtifactTexture(): void {
+    if (this.textures.exists('guard-artifact')) {
+      return;
+    }
+
+    const canvas = this.textures.createCanvas('guard-artifact', 64, 76);
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext();
+    context.clearRect(0, 0, 64, 76);
+    context.save();
+    context.translate(32, 38);
+
+    context.beginPath();
+    context.moveTo(0, -32);
+    context.lineTo(26, -20);
+    context.lineTo(23, 9);
+    context.quadraticCurveTo(17, 27, 0, 35);
+    context.quadraticCurveTo(-17, 27, -23, 9);
+    context.lineTo(-26, -20);
+    context.closePath();
+    context.fillStyle = '#25466f';
+    context.fill();
+    context.lineWidth = 4;
+    context.strokeStyle = '#e8c76a';
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(0, -22);
+    context.lineTo(18, -14);
+    context.lineTo(16, 6);
+    context.quadraticCurveTo(12, 19, 0, 25);
+    context.quadraticCurveTo(-12, 19, -16, 6);
+    context.lineTo(-18, -14);
+    context.closePath();
+    context.lineWidth = 2;
+    context.strokeStyle = '#86d8f0';
+    context.stroke();
+
+    context.beginPath();
+    context.arc(0, -4, 6, 0, Math.PI * 2);
+    context.fillStyle = '#8fe9ff';
+    context.fill();
+    context.lineWidth = 2;
+    context.strokeStyle = '#e8f8ff';
+    context.stroke();
+
+    context.restore();
+    canvas.refresh();
   }
 
   private createGlowTexture(): void {

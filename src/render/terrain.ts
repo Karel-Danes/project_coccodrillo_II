@@ -1,10 +1,29 @@
+import grassFillUrl from '../../graphics/sidescroller_starter_pack/terrain/ground_fill_96x32_derived.png?url';
+import grassTopUrl from '../../graphics/sidescroller_starter_pack/terrain/ground_top_96x32_derived.png?url';
 import Phaser from 'phaser';
 import { tileAt } from '../game/level';
 import type { Level } from '../game/types';
 
 const STONE_KEY = 'terrain-stone';
+const GRASS_TOP = 'terrain-grass-top';
+const GRASS_FILL = 'terrain-grass-fill';
 const TILE = 32;
 const VARIANTS = 3;
+
+/**
+ * The lush opening uses the starter pack's grass/dirt art; the ruin end uses
+ * runtime night-stone. Both are drawn per tile, with the stone alpha ramping
+ * up across the middle of the world.
+ */
+export function loadTerrainAssets(scene: Phaser.Scene): void {
+  const frame = { frameWidth: TILE, frameHeight: TILE };
+  if (!scene.textures.exists(GRASS_TOP)) {
+    scene.load.spritesheet(GRASS_TOP, grassTopUrl, frame);
+  }
+  if (!scene.textures.exists(GRASS_FILL)) {
+    scene.load.spritesheet(GRASS_FILL, grassFillUrl, frame);
+  }
+}
 
 /**
  * Draws three variants of a night-stone top tile and three fill tiles into
@@ -47,7 +66,6 @@ function ensureStoneTexture(scene: Phaser.Scene): void {
         context.fillRect(x, y, size, size);
       }
 
-      // A few cracks so long walls do not read as flat noise.
       context.fillStyle = '#1e2634';
       const cracks = variant === 0 ? 1 : 2;
       for (let i = 0; i < cracks; i += 1) {
@@ -58,7 +76,6 @@ function ensureStoneTexture(scene: Phaser.Scene): void {
       }
 
       if (type === 0) {
-        // Moonlit rim on walkable surfaces.
         context.fillStyle = '#8090aa';
         context.fillRect(ox, 0, TILE, 2);
         context.fillStyle = '#596984';
@@ -88,7 +105,7 @@ function ensureStoneTexture(scene: Phaser.Scene): void {
 /**
  * Bakes solid tiles into half-resolution render textures, displayed at 2x.
  * Terrain is split into 32-column chunks so no texture exceeds 1024 px wide
- * on mobile GPUs. Surface tiles get the lit rim; covered tiles the fill.
+ * on mobile GPUs. Columns 6-76 cross-fade from grass to night stone.
  */
 export function createTerrainTexture(
   scene: Phaser.Scene,
@@ -121,14 +138,18 @@ export function createTerrainTexture(
 
         const isSurface = tileAt(level, col, row - 1) !== 'solid';
         const variant = (col * 5 + row * 7) % VARIANTS;
-        const frame = `${isSurface ? 'top' : 'fill'}-${variant}`;
+        const raw = Math.min(1, Math.max(0, (col - 6) / (76 - 6)));
+        const progress = raw * raw * (3 - 2 * raw);
 
-        texture.drawFrame(
-          STONE_KEY,
-          frame,
-          localCol * TILE,
-          row * TILE,
-        );
+        const grassKey = isSurface ? GRASS_TOP : GRASS_FILL;
+        const stoneFrame = `${isSurface ? 'top' : 'fill'}-${variant}`;
+        const x = localCol * TILE;
+        const y = row * TILE;
+
+        texture.drawFrame(grassKey, variant, x, y);
+        if (progress > 0.01) {
+          texture.drawFrame(STONE_KEY, stoneFrame, x, y, progress);
+        }
       }
     }
   }

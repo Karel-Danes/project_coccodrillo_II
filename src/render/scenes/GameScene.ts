@@ -4,7 +4,11 @@ import { publishEvents } from '../../bridge/publish';
 import { tileAt } from '../../game/level';
 import { LEVEL_01 } from '../../game/levels';
 import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
-import { PLAYER_HEIGHT, PLAYER_WIDTH } from '../../game/player';
+import {
+  getAttackPhase,
+  PLAYER_HEIGHT,
+  PLAYER_WIDTH,
+} from '../../game/player';
 import { Simulation } from '../../game/simulation';
 import type { DeathReason, Level, Player, PlayerState } from '../../game/types';
 import {
@@ -26,6 +30,8 @@ const PLAYER_ANIMATION: Record<PlayerState, string> = {
   walk: 'knight-walk',
   jump: 'knight-jump',
   fall: 'knight-fall',
+  attack: 'knight-attack',
+  guard: 'knight-guard',
   die: 'knight-death',
 };
 
@@ -39,8 +45,12 @@ export class GameScene extends Phaser.Scene {
   private tick = 0;
 
   private playerSprite!: Phaser.GameObjects.Sprite;
+  private cameraFocus!: Phaser.GameObjects.Zone;
   private currentAnimation = '';
   private touchControls: TouchControls | null = null;
+
+  private guardFx!: Phaser.GameObjects.Graphics;
+  private attackFx!: Phaser.GameObjects.Graphics;
 
   private debugText!: Phaser.GameObjects.Text;
   private keyboardHint!: Phaser.GameObjects.Text;
@@ -50,6 +60,8 @@ export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
+  private keyX!: Phaser.Input.Keyboard.Key;
+  private keyC!: Phaser.Input.Keyboard.Key;
   private keyR!: Phaser.Input.Keyboard.Key;
 
   constructor(private readonly bus: GameEventBus) {
@@ -62,10 +74,13 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     const level = this.simulation.level;
-    const width = level.cols * level.tileSize;
-    const height = level.rows * level.tileSize;
+    const worldWidth = level.cols * level.tileSize;
+    const worldHeight = level.rows * level.tileSize;
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
 
     this.cameras.main.setBackgroundColor('#0b0d10');
+    this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
     this.drawLevel(level);
     registerKnightAnimations(this);
 
@@ -75,12 +90,25 @@ export class GameScene extends Phaser.Scene {
       .setScale(KNIGHT_SCALE)
       .setDepth(10);
 
+    this.guardFx = this.add.graphics().setDepth(9);
+    this.attackFx = this.add.graphics().setDepth(11);
+
+    this.cameraFocus = this.add.zone(0, 0, 1, 1);
+    this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
+    this.centerCameraOnPlayer();
+
     this.keyboardHint = this.add
-      .text(16, height - 34, '← → / A D  walk    SPACE  jump    R  restart', {
-        fontFamily: 'monospace',
-        fontSize: '16px',
-        color: '#5f6b78',
-      })
+      .text(
+        16,
+        viewHeight - 34,
+        '← → / A D  walk    SPACE  jump    X  sword    C  guard    R  restart',
+        {
+          fontFamily: 'monospace',
+          fontSize: '16px',
+          color: '#5f6b78',
+        },
+      )
+      .setScrollFactor(0)
       .setDepth(20);
 
     this.debugText = this.add
@@ -90,17 +118,19 @@ export class GameScene extends Phaser.Scene {
         color: '#7f8b98',
         lineSpacing: 4,
       })
+      .setScrollFactor(0)
       .setDepth(20);
 
     this.deathShade = this.add
-      .rectangle(0, 0, width, height, 0x000000, 0.55)
+      .rectangle(0, 0, viewWidth, viewHeight, 0x000000, 0.55)
       .setOrigin(0, 0)
+      .setScrollFactor(0)
       .setDepth(25)
       .setVisible(false)
       .setInteractive();
 
     this.deathText = this.add
-      .text(width / 2, height / 2, '', {
+      .text(viewWidth / 2, viewHeight / 2, '', {
         fontFamily: 'monospace',
         fontSize: '32px',
         color: '#e8dcc0',
@@ -108,6 +138,7 @@ export class GameScene extends Phaser.Scene {
         lineSpacing: 12,
       })
       .setOrigin(0.5)
+      .setScrollFactor(0)
       .setDepth(26)
       .setVisible(false);
 
@@ -124,11 +155,12 @@ export class GameScene extends Phaser.Scene {
     this.cursors = keyboard.createCursorKeys();
     this.keyA = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keyX = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    this.keyC = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
     this.keyR = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
     const forceTouch = new URLSearchParams(window.location.search).has('touch');
-    const showTouchControls =
-      forceTouch || this.sys.game.device.input.touch;
+    const showTouchControls = forceTouch || this.sys.game.device.input.touch;
 
     if (showTouchControls) {
       this.keyboardHint.setVisible(false);
@@ -163,6 +195,8 @@ export class GameScene extends Phaser.Scene {
         this.cursors.space.isDown ||
         this.cursors.up.isDown ||
         touch?.jumpHeld === true,
+      attackHeld: this.keyX.isDown || touch?.attackHeld === true,
+      guardHeld: this.keyC.isDown || touch?.guardHeld === true,
     });
 
     this.loop.advance(delta, () => {
@@ -192,19 +226,37 @@ export class GameScene extends Phaser.Scene {
 
     this.deathShade.setVisible(false);
     this.deathText.setVisible(false);
+    this.guardFx.clear();
+    this.attackFx.clear();
 
+    this.centerCameraOnPlayer();
     this.render();
+  }
+
+  private centerCameraOnPlayer(): void {
+    const player = this.simulation.state.player;
+    this.cameraFocus.setPosition(
+      player.position.x + PLAYER_WIDTH / 2,
+      player.position.y + PLAYER_HEIGHT / 2,
+    );
+    this.cameras.main.centerOn(this.cameraFocus.x, this.cameraFocus.y);
   }
 
   private render(): void {
     const { player } = this.simulation.state;
     this.renderPlayer(player);
+    this.renderCombatFx(player);
+
+    this.cameraFocus.setPosition(
+      player.position.x + PLAYER_WIDTH / 2,
+      player.position.y + PLAYER_HEIGHT / 2,
+    );
 
     this.debugText.setText([
-      'COCCODRILLO-II — MILESTONE 1',
+      'COCCODRILLO-II — WORLD 01',
       `state ${player.state} · grounded ${player.grounded ? 'yes' : 'no'}`,
       `pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
-      `tick ${this.tick}`,
+      `cam ${this.cameras.main.scrollX.toFixed(0)}, ${this.cameras.main.scrollY.toFixed(0)} · tick ${this.tick}`,
     ]);
   }
 
@@ -219,6 +271,50 @@ export class GameScene extends Phaser.Scene {
     if (animation !== this.currentAnimation) {
       this.playerSprite.play(animation, true);
       this.currentAnimation = animation;
+    }
+  }
+
+  private renderCombatFx(player: Player): void {
+    this.guardFx.clear();
+    this.attackFx.clear();
+
+    if (player.state === 'guard') {
+      const cx = player.position.x + PLAYER_WIDTH / 2;
+      const cy = player.position.y + PLAYER_HEIGHT / 2;
+      const pulse = 1 + Math.sin(this.time.now / 140) * 0.04;
+
+      this.guardFx
+        .fillStyle(0x4fc3ff, 0.1)
+        .fillEllipse(cx, cy, 96 * pulse, 138 * pulse);
+      this.guardFx
+        .lineStyle(2, 0x9fe8ff, 0.55)
+        .strokeEllipse(cx, cy, 96 * pulse, 138 * pulse);
+
+      const start = player.facing === 1 ? -0.7 : Math.PI - 0.7;
+      const end = player.facing === 1 ? 0.7 : Math.PI + 0.7;
+      this.guardFx
+        .lineStyle(3, 0xd8f6ff, 0.8)
+        .beginPath()
+        .arc(cx, cy, 58, start, end)
+        .strokePath();
+    }
+
+    if (player.state === 'attack' && getAttackPhase(player) === 'active') {
+      const cx = player.position.x + PLAYER_WIDTH / 2;
+      const cy = player.position.y + PLAYER_HEIGHT * 0.45;
+      const start = player.facing === 1 ? -0.95 : Math.PI - 0.95;
+      const end = player.facing === 1 ? 0.95 : Math.PI + 0.95;
+
+      this.attackFx
+        .lineStyle(7, 0xdff2ff, 0.75)
+        .beginPath()
+        .arc(cx, cy, 64, start, end)
+        .strokePath();
+      this.attackFx
+        .lineStyle(2, 0xffffff, 0.9)
+        .beginPath()
+        .arc(cx, cy, 54, start, end)
+        .strokePath();
     }
   }
 

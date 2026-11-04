@@ -1,12 +1,26 @@
 import Phaser from 'phaser';
 import type { InputState } from '../game/types';
 
-type HoldKey = 'left' | 'right' | 'jumpHeld';
+type HoldKey = 'left' | 'right' | 'jumpHeld' | 'attackHeld' | 'guardHeld';
 
 const IDLE_FILL = 0x0f141a;
 const ACTIVE_FILL = 0x3a4a5c;
 const FILL_ALPHA = 0.45;
 const ACTIVE_ALPHA = 0.9;
+
+function labelSize(key: HoldKey): string {
+  switch (key) {
+    case 'jumpHeld':
+      return '18px';
+    case 'attackHeld':
+      return '16px';
+    case 'guardHeld':
+      return '13px';
+    case 'left':
+    case 'right':
+      return '26px';
+  }
+}
 
 /**
  * On-screen hold buttons for touch devices. Each button tracks its own
@@ -17,6 +31,8 @@ export class TouchControls {
     left: false,
     right: false,
     jumpHeld: false,
+    attackHeld: false,
+    guardHeld: false,
   };
 
   private readonly objects: Phaser.GameObjects.GameObject[] = [];
@@ -30,12 +46,15 @@ export class TouchControls {
 
     const height = this.scene.scale.height;
     const width = this.scene.scale.width;
-    const bottom = height - 108;
+    // Keep the controls below the walking surface so they never cover the knight.
+    const bottom = height - 64;
 
-    // offset from the left edge so the spawn point stays readable
+    // Movement on the left, combat and jump on the right.
     this.createButton(165, bottom, 48, '◀', 'left');
     this.createButton(315, bottom, 48, '▶', 'right');
-    this.createButton(width - 120, bottom, 58, 'JUMP', 'jumpHeld');
+    this.createButton(width - 390, bottom, 44, 'GUARD', 'guardHeld');
+    this.createButton(width - 265, bottom, 48, 'ATK', 'attackHeld');
+    this.createButton(width - 125, bottom, 58, 'JUMP', 'jumpHeld');
   }
 
   destroy(): void {
@@ -59,16 +78,18 @@ export class TouchControls {
     const circle = this.scene.add
       .circle(x, y, radius, IDLE_FILL, FILL_ALPHA)
       .setStrokeStyle(2, 0x6a7785, 0.9)
+      .setScrollFactor(0)
       .setDepth(8)
       .setInteractive();
 
     const text = this.scene.add
       .text(x, y, label, {
         fontFamily: 'monospace',
-        fontSize: key === 'jumpHeld' ? '20px' : '26px',
+        fontSize: labelSize(key),
         color: '#d7dde3',
       })
       .setOrigin(0.5)
+      .setScrollFactor(0)
       .setDepth(9);
 
     this.objects.push(circle, text);

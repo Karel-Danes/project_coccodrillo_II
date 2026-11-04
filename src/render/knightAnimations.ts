@@ -21,6 +21,13 @@ export function loadKnightAssets(scene: Phaser.Scene): void {
   if (!scene.textures.exists(KNIGHT_TEXTURES.jump)) {
     scene.load.spritesheet(KNIGHT_TEXTURES.jump, KNIGHT_STRIPS.jump, FRAME_CONFIG);
   }
+  if (!scene.textures.exists(KNIGHT_TEXTURES.attack)) {
+    scene.load.spritesheet(
+      KNIGHT_TEXTURES.attack,
+      KNIGHT_STRIPS.attack,
+      FRAME_CONFIG,
+    );
+  }
   if (!scene.textures.exists(KNIGHT_TEXTURES.death)) {
     scene.load.spritesheet(KNIGHT_TEXTURES.death, KNIGHT_STRIPS.death, FRAME_CONFIG);
   }
@@ -64,6 +71,26 @@ export function registerKnightAnimations(scene: Phaser.Scene): void {
       }),
       frameRate: 8,
       repeat: 0,
+    },
+    {
+      key: 'knight-attack',
+      frames: scene.anims.generateFrameNumbers(KNIGHT_TEXTURES.attack, {
+        start: 0,
+        end: 5,
+      }),
+      // Six frames over ~0.43s, matching the 0.42s combat window.
+      frameRate: 14,
+      repeat: 0,
+    },
+    {
+      // A held shield pose derived from the idle strip while the aura is on.
+      key: 'knight-guard',
+      frames: scene.anims.generateFrameNumbers(KNIGHT_TEXTURES.idle, {
+        start: 0,
+        end: 0,
+      }),
+      frameRate: 1,
+      repeat: -1,
     },
     {
       key: 'knight-death',

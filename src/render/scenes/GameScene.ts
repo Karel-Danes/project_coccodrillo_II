@@ -2,10 +2,8 @@ import Phaser from 'phaser';
 import type { GameEventBus } from '../../bridge/events';
 import { publishEvents } from '../../bridge/publish';
 import {
-  ENEMY_HEIGHT,
-  ENEMY_MAX_HP,
-  ENEMY_WIDTH,
   getEnemyAttackPhase,
+  statsFor,
 } from '../../game/enemy';
 import { tileAt } from '../../game/level';
 import { LEVEL_01 } from '../../game/levels';
@@ -19,28 +17,30 @@ import { Simulation } from '../../game/simulation';
 import type {
   DeathReason,
   Enemy,
+  EnemyKind,
   EnemyState,
   Level,
   Player,
   PlayerState,
 } from '../../game/types';
 import {
+  ENEMY_ART,
+  enemyAnimationKey,
+  enemyTextureKey,
+} from '../assets/enemies';
+import {
   KNIGHT_FEET_Y,
   KNIGHT_FRAME_HEIGHT,
   KNIGHT_SCALE,
 } from '../assets/knight';
+import { createBackdrop, loadDesertAssets, type Backdrop } from '../backdrop';
 import {
-  SKELETON_FEET_Y,
-  SKELETON_FRAME_HEIGHT,
-  SKELETON_SCALE,
-  SKELETON_TEXTURES,
-} from '../assets/skeleton';
+  loadEnemyAssets,
+  registerEnemyAnimations,
+} from '../enemyAnimations';
 import { loadKnightAssets, registerKnightAnimations } from '../knightAnimations';
-import {
-  loadSkeletonAssets,
-  registerSkeletonAnimations,
-} from '../skeletonAnimations';
-import { createTerrainTexture, loadTerrainAssets } from '../terrain';
+import { Sfx } from '../sfx';
+import { createTerrainTexture } from '../terrain';
 import { TouchControls } from '../TouchControls';
 
 const COLORS = {
@@ -57,18 +57,33 @@ const PLAYER_ANIMATION: Record<PlayerState, string> = {
   die: 'knight-death',
 };
 
-const ENEMY_ANIMATION: Record<EnemyState, string> = {
-  idle: 'skeleton-idle',
-  walk: 'skeleton-walk',
-  attack: 'skeleton-attack',
-  hurt: 'skeleton-hurt',
-  die: 'skeleton-death',
-};
-
 type EnemyView = {
   sprite: Phaser.GameObjects.Sprite;
   animation: string;
+  kind: EnemyKind;
 };
+
+/**
+ * Development shortcuts: ?spawnX=1900 drops the Knight at a world x on the
+ * ground, and ?boss=1 puts him at the arena entrance for the intro.
+ */
+function resolveStartLevel(): Level {
+  if (typeof window === 'undefined') {
+    return LEVEL_01;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('boss')) {
+    return { ...LEVEL_01, spawn: { x: 5240, y: 936 } };
+  }
+
+  const spawnX = Number(params.get('spawnX'));
+  if (Number.isFinite(spawnX) && spawnX > 0) {
+    return { ...LEVEL_01, spawn: { x: spawnX, y: 936 } };
+  }
+
+  return LEVEL_01;
+}
 
 /**
  * Render layer only: draws the simulation state, feeds it input, and turns
@@ -77,15 +92,19 @@ type EnemyView = {
 export class GameScene extends Phaser.Scene {
   private readonly loop = new FixedStepLoop(FIXED_TIMESTEP_MS);
   private simulation = new Simulation(LEVEL_01);
+  private startLevel: Level = LEVEL_01;
   private tick = 0;
 
   private playerSprite!: Phaser.GameObjects.Sprite;
   private cameraFocus!: Phaser.GameObjects.Zone;
   private currentAnimation = '';
   private touchControls: TouchControls | null = null;
+  private backdrop!: Backdrop;
 
   private enemyViews: EnemyView[] = [];
   private enemyHud!: Phaser.GameObjects.Graphics;
+  private bossHud!: Phaser.GameObjects.Graphics;
+  private bossName!: Phaser.GameObjects.Text;
 
   private guardFx!: Phaser.GameObjects.Graphics;
   private attackFx!: Phaser.GameObjects.Graphics;
@@ -94,6 +113,20 @@ export class GameScene extends Phaser.Scene {
   private keyboardHint!: Phaser.GameObjects.Text;
   private deathShade!: Phaser.GameObjects.Rectangle;
   private deathText!: Phaser.GameObjects.Text;
+
+  private cutsceneShade!: Phaser.GameObjects.Rectangle;
+  private cutsceneGlow!: Phaser.GameObjects.Image;
+  private cutsceneBubble: Phaser.GameObjects.Container | null = null;
+  private cutsceneActive = false;
+  private cutsceneGeneration = 0;
+  private cutsceneGolemIndex = -1;
+  private cutsceneTweens: Phaser.Tweens.Tween[] = [];
+
+  private lastPlayerState: PlayerState | null = null;
+  private lastPlayerGrounded = true;
+  private lastEnemyStates: Array<EnemyState | undefined> = [];
+
+  private readonly sfx = new Sfx();
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
@@ -108,25 +141,42 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     loadKnightAssets(this);
-    loadSkeletonAssets(this);
-    loadTerrainAssets(this);
+    loadEnemyAssets(this);
+    loadDesertAssets(this);
   }
 
   create(): void {
+    this.startLevel = resolveStartLevel();
+    this.simulation = new Simulation(this.startLevel);
+
     const level = this.simulation.level;
     const worldWidth = level.cols * level.tileSize;
     const worldHeight = level.rows * level.tileSize;
     const viewWidth = this.scale.width;
     const viewHeight = this.scale.height;
+    const groundY = level.spawn.y + PLAYER_HEIGHT;
 
     this.cameras.main.setBackgroundColor('#0b0d10');
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
 
+    this.backdrop = createBackdrop(this, viewWidth, viewHeight, groundY);
     createTerrainTexture(this, level);
     this.drawSpikes(level);
 
+    // A cool moon over the desert night.
+    this.add
+      .circle(viewWidth * 0.78, viewHeight * 0.2, 70, 0xffdf9a, 0.1)
+      .setScrollFactor(0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(-45);
+    this.add
+      .circle(viewWidth * 0.78, viewHeight * 0.2, 32, 0xfff0c8, 0.95)
+      .setScrollFactor(0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(-45);
+
     registerKnightAnimations(this);
-    registerSkeletonAnimations(this);
+    registerEnemyAnimations(this);
 
     this.playerSprite = this.add
       .sprite(0, 0, 'knight-idle')
@@ -134,14 +184,21 @@ export class GameScene extends Phaser.Scene {
       .setScale(KNIGHT_SCALE)
       .setDepth(10);
 
-    this.enemyViews = this.simulation.state.enemies.map(() => ({
-      sprite: this.add
-        .sprite(0, 0, SKELETON_TEXTURES.idle)
-        .setOrigin(0.5, SKELETON_FEET_Y / SKELETON_FRAME_HEIGHT)
-        .setScale(SKELETON_SCALE)
-        .setDepth(9),
-      animation: '',
-    }));
+    this.enemyViews = this.simulation.state.enemies.map((enemy) => {
+      const art = ENEMY_ART[enemy.kind];
+      const sprite = this.add
+        .sprite(0, 0, enemyTextureKey(enemy.kind, 'idle'))
+        .setScale(art.scale)
+        .setDepth(9);
+
+      if (art.anchor === 'feet') {
+        sprite.setOrigin(0.5, art.feetY / art.frameHeight);
+      } else {
+        sprite.setOrigin(0.5, 0.5);
+      }
+
+      return { sprite, animation: '', kind: enemy.kind };
+    });
 
     this.guardFx = this.add.graphics().setDepth(9);
     this.attackFx = this.add.graphics().setDepth(11);
@@ -179,8 +236,26 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
+    this.bossName = this.add
+      .text(viewWidth / 2, 28, 'THE MIGHTY JAN ZÁTKA', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '22px',
+        color: '#f3dfa2',
+        stroke: '#1a1208',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(21)
+      .setVisible(false);
+
+    this.bossHud = this.add
+      .graphics()
+      .setScrollFactor(0)
+      .setDepth(21);
+
     this.deathShade = this.add
-      .rectangle(0, 0, viewWidth, viewHeight, 0x000000, 0.55)
+      .rectangle(0, 0, viewWidth, viewHeight, 0x000000, 0.58)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(25)
@@ -193,7 +268,7 @@ export class GameScene extends Phaser.Scene {
         fontSize: '32px',
         color: '#e8dcc0',
         align: 'center',
-        lineSpacing: 12,
+        lineSpacing: 14,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -201,10 +276,24 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
 
     this.deathShade.on('pointerdown', () => {
-      if (this.simulation.state.status === 'dead') {
+      const state = this.simulation.state;
+      if (state.status === 'dead' || state.mode === 'victory') {
         this.restart();
       }
     });
+
+    this.createGlowTexture();
+    this.cutsceneShade = this.add
+      .rectangle(0, 0, viewWidth, viewHeight, 0x000000, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(27)
+      .setVisible(false);
+    this.cutsceneGlow = this.add
+      .image(0, 0, 'boss-glow')
+      .setDepth(28)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
 
     const keyboard = this.input.keyboard;
     if (keyboard === null) {
@@ -217,6 +306,9 @@ export class GameScene extends Phaser.Scene {
     this.keyC = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
     this.keyR = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
+    keyboard.on('keydown', this.unlockAudio, this);
+    this.input.on('pointerdown', this.unlockAudio, this);
+
     const forceTouch = new URLSearchParams(window.location.search).has('touch');
     const showTouchControls = forceTouch || this.sys.game.device.input.touch;
 
@@ -227,10 +319,26 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.bus.on('playerDied', this.onPlayerDied, this);
+    this.bus.on('enemyHit', this.onEnemyHit, this);
+    this.bus.on('enemyDied', this.onEnemyDied, this);
+    this.bus.on('attackBlocked', this.onAttackBlocked, this);
+    this.bus.on('bossIntro', this.startBossCutscene, this);
+    this.bus.on('bossDefeated', this.onBossDefeated, this);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.bus.off('playerDied', this.onPlayerDied, this);
+      this.bus.off('enemyHit', this.onEnemyHit, this);
+      this.bus.off('enemyDied', this.onEnemyDied, this);
+      this.bus.off('attackBlocked', this.onAttackBlocked, this);
+      this.bus.off('bossIntro', this.startBossCutscene, this);
+      this.bus.off('bossDefeated', this.onBossDefeated, this);
+      keyboard.off('keydown', this.unlockAudio, this);
+      this.input.off('pointerdown', this.unlockAudio, this);
       this.touchControls?.destroy();
       this.touchControls = null;
+      this.cutsceneBubble?.destroy();
+      this.cutsceneBubble = null;
+      this.sfx.close();
     });
 
     this.bus.emit('sceneReady');
@@ -266,6 +374,10 @@ export class GameScene extends Phaser.Scene {
     this.render();
   }
 
+  private unlockAudio(): void {
+    this.sfx.unlock();
+  }
+
   private onPlayerDied(reason: DeathReason): void {
     const title =
       reason === 'spikes'
@@ -276,24 +388,260 @@ export class GameScene extends Phaser.Scene {
     this.deathText.setText(`${title}\nTAP OR PRESS R TO RETRY`);
     this.deathShade.setVisible(true);
     this.deathText.setVisible(true);
+    this.sfx.playerDeath();
+  }
+
+  private onEnemyHit(): void {
+    this.sfx.hit();
+  }
+
+  private onEnemyDied(kind: EnemyKind): void {
+    if (kind !== 'golem') {
+      this.sfx.enemyDie();
+    }
+  }
+
+  private onAttackBlocked(): void {
+    this.sfx.block();
+  }
+
+  private onBossDefeated(): void {
+    this.bossName.setVisible(false);
+    this.bossHud.clear();
+    this.deathText.setText(
+      'THE MIGHTY JAN ZÁTKA HAS FALLEN\nYOU WIN\nPRESS R TO PLAY AGAIN',
+    );
+    this.deathShade.setVisible(true);
+    this.deathText.setVisible(true);
+    this.sfx.victory();
+  }
+
+  private startBossCutscene(): void {
+    if (this.cutsceneActive) {
+      return;
+    }
+
+    const enemies = this.simulation.state.enemies;
+    const golemIndex = enemies.findIndex((enemy) => enemy.kind === 'golem');
+    const golem = enemies[golemIndex];
+    const view = this.enemyViews[golemIndex];
+    if (!golem || !view) {
+      this.simulation.resumeFromCutscene();
+      return;
+    }
+
+    this.cutsceneActive = true;
+    this.cutsceneGeneration += 1;
+    const generation = this.cutsceneGeneration;
+    this.cutsceneGolemIndex = golemIndex;
+
+    this.debugText.setVisible(false);
+    this.keyboardHint.setVisible(false);
+    this.touchControls?.setVisible(false);
+    this.bossName.setVisible(false);
+    this.bossHud.clear();
+
+    const stats = statsFor('golem');
+    const golemX = golem.position.x + stats.width / 2;
+    const golemY = golem.position.y + stats.height / 2;
+
+    this.cameraFocus.setPosition(golemX, golemY);
+    this.cameras.main.zoomTo(1.7, 900, 'Sine.easeInOut');
+
+    this.cutsceneShade.setVisible(true).setAlpha(0);
+    this.tweens.add({
+      targets: this.cutsceneShade,
+      alpha: 0.84,
+      duration: 650,
+      ease: 'Sine.easeOut',
+    });
+
+    this.cutsceneGlow
+      .setVisible(true)
+      .setAlpha(0)
+      .setPosition(golemX, golemY - stats.height * 0.15)
+      .setScale(1.15);
+    this.tweens.add({
+      targets: this.cutsceneGlow,
+      alpha: 0.85,
+      duration: 850,
+      ease: 'Sine.easeOut',
+    });
+
+    const art = ENEMY_ART.golem;
+    view.sprite.setDepth(29).setTint(0xffe2a8).setScale(art.scale);
+    this.cutsceneTweens.push(
+      this.tweens.add({
+        targets: view.sprite,
+        scaleX: art.scale * 1.035,
+        scaleY: art.scale * 1.035,
+        yoyo: true,
+        repeat: -1,
+        duration: 900,
+        ease: 'Sine.easeInOut',
+      }),
+    );
+
+    this.sfx.bossRoar();
+
+    this.time.delayedCall(950, () => {
+      if (generation !== this.cutsceneGeneration) {
+        return;
+      }
+      this.showBossBubble(golemX, golem.position.y, generation);
+    });
+
+    this.time.delayedCall(5800, () => {
+      if (generation !== this.cutsceneGeneration) {
+        return;
+      }
+      this.endBossCutscene();
+    });
+  }
+
+  private showBossBubble(
+    x: number,
+    golemTopY: number,
+    generation: number,
+  ): void {
+    const container = this.add.container(x, golemTopY - 50).setDepth(30);
+    const background = this.add.graphics();
+
+    background.fillStyle(0xffefd0, 0.97);
+    background.lineStyle(4, 0x2a1c10, 1);
+    background.fillRoundedRect(-300, -150, 600, 130, 20);
+    background.strokeRoundedRect(-300, -150, 600, 130, 20);
+    background.fillTriangle(-26, -22, 26, -22, 0, 18);
+    background.lineBetween(-26, -22, 0, 18);
+    background.lineBetween(26, -22, 0, 18);
+
+    const text = this.add.text(-276, -136, '', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '27px',
+      color: '#241a12',
+      wordWrap: { width: 552 },
+      lineSpacing: 6,
+    });
+
+    container.add([background, text]);
+    container.setScale(0.25).setAlpha(0);
+    this.cutsceneBubble = container;
+
+    this.tweens.add({
+      targets: container,
+      scale: 1,
+      alpha: 1,
+      duration: 420,
+      ease: 'Back.Out',
+    });
+
+    const fullText =
+      "I'm the Mighty Jan Zátka!\nHow dare you to wake me up!";
+    const counter = { characters: 0 };
+    this.tweens.add({
+      targets: counter,
+      characters: fullText.length,
+      duration: 1900,
+      delay: 180,
+      ease: 'Linear',
+      onUpdate: () => {
+        text.setText(fullText.slice(0, Math.floor(counter.characters)));
+      },
+    });
+
+    this.tweens.add({
+      targets: container,
+      alpha: 0,
+      delay: 4300,
+      duration: 500,
+      onComplete: () => {
+        if (generation === this.cutsceneGeneration) {
+          container.destroy();
+          if (this.cutsceneBubble === container) {
+            this.cutsceneBubble = null;
+          }
+        }
+      },
+    });
+  }
+
+  private endBossCutscene(): void {
+    if (!this.cutsceneActive) {
+      return;
+    }
+
+    this.cutsceneActive = false;
+    for (const tween of this.cutsceneTweens) {
+      tween.stop();
+    }
+    this.cutsceneTweens = [];
+
+    const view = this.enemyViews[this.cutsceneGolemIndex];
+    if (view) {
+      view.sprite.setDepth(9).clearTint().setScale(ENEMY_ART.golem.scale);
+    }
+
+    if (this.cutsceneBubble) {
+      this.cutsceneBubble.destroy();
+      this.cutsceneBubble = null;
+    }
+
+    this.tweens.add({
+      targets: [this.cutsceneShade, this.cutsceneGlow],
+      alpha: 0,
+      duration: 480,
+      onComplete: () => {
+        this.cutsceneShade.setVisible(false);
+        this.cutsceneGlow.setVisible(false);
+      },
+    });
+
+    this.cameras.main.zoomTo(1, 700, 'Sine.easeInOut');
+    this.debugText.setVisible(true);
+    this.keyboardHint.setVisible(this.touchControls === null);
+    this.touchControls?.setVisible(true);
+    this.simulation.resumeFromCutscene();
   }
 
   private restart(): void {
-    this.simulation = new Simulation(LEVEL_01);
+    this.cutsceneGeneration += 1;
+    this.cutsceneActive = false;
+    this.cutsceneGolemIndex = -1;
+    this.tweens.killAll();
+    this.time.removeAllEvents();
+    this.cutsceneBubble?.destroy();
+    this.cutsceneBubble = null;
+    this.cutsceneShade.setVisible(false).setAlpha(0);
+    this.cutsceneGlow.setVisible(false).setAlpha(0);
+
+    this.simulation = new Simulation(this.startLevel);
     this.loop.reset();
     this.tick = 0;
     this.currentAnimation = '';
+    this.lastPlayerState = null;
+    this.lastPlayerGrounded = true;
+    this.lastEnemyStates = [];
 
     this.deathShade.setVisible(false);
     this.deathText.setVisible(false);
     this.guardFx.clear();
     this.attackFx.clear();
     this.enemyHud.clear();
+    this.bossHud.clear();
+    this.bossName.setVisible(false);
+    this.debugText.setVisible(true);
+    this.keyboardHint.setVisible(this.touchControls === null);
+    this.touchControls?.setVisible(true);
+
     for (const view of this.enemyViews) {
+      const art = ENEMY_ART[view.kind];
       view.animation = '';
-      view.sprite.setVisible(true);
+      view.sprite.setVisible(true).setDepth(9).clearTint().setScale(art.scale);
     }
 
+    this.cameras.main.zoomEffect.reset();
+    this.cameras.main.setZoom(1);
+    this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
     this.centerCameraOnPlayer();
     this.render();
   }
@@ -308,24 +656,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private render(): void {
-    const { player, enemies } = this.simulation.state;
+    const { player, enemies, mode } = this.simulation.state;
+
     this.renderPlayer(player);
     this.renderEnemies(enemies);
     this.renderCombatFx(player, enemies);
+    this.renderBossBar(player, enemies);
+    this.updateSfx(player, enemies);
 
-    this.cameraFocus.setPosition(
-      player.position.x + PLAYER_WIDTH / 2,
-      player.position.y + PLAYER_HEIGHT / 2,
-    );
+    this.backdrop.update(this.cameras.main.scrollX);
 
-    const enemy = enemies[0];
+    if (!this.cutsceneActive) {
+      this.cameraFocus.setPosition(
+        player.position.x + PLAYER_WIDTH / 2,
+        player.position.y + PLAYER_HEIGHT / 2,
+      );
+    }
+
+    const golem = enemies.find((enemy) => enemy.kind === 'golem');
+    const alive = enemies.filter((enemy) => enemy.state !== 'die').length;
     this.debugText.setText([
       'COCCODRILLO-II — WORLD 01',
-      `state ${player.state} · grounded ${player.grounded ? 'yes' : 'no'}`,
+      `mode ${mode} · ${player.state} · grounded ${player.grounded ? 'yes' : 'no'}`,
       `pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
-      enemy
-        ? `skeleton ${enemy.state} · hp ${enemy.hp}/${ENEMY_MAX_HP}`
-        : 'skeleton —',
+      `enemies ${alive}/${enemies.length} alive${golem ? ` · golem ${golem.hp}/${statsFor('golem').maxHp}` : ''}`,
       `cam ${this.cameras.main.scrollX.toFixed(0)}, ${this.cameras.main.scrollY.toFixed(0)} · tick ${this.tick}`,
     ]);
   }
@@ -352,14 +706,24 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
+      const art = ENEMY_ART[enemy.kind];
+      const stats = statsFor(enemy.kind);
       view.sprite.setVisible(true);
-      view.sprite.setPosition(
-        enemy.position.x + ENEMY_WIDTH / 2,
-        enemy.position.y + ENEMY_HEIGHT,
-      );
       view.sprite.setFlipX(enemy.facing === -1);
 
-      const animation = ENEMY_ANIMATION[enemy.state];
+      if (art.anchor === 'feet') {
+        view.sprite.setPosition(
+          enemy.position.x + stats.width / 2,
+          enemy.position.y + stats.height,
+        );
+      } else {
+        view.sprite.setPosition(
+          enemy.position.x + stats.width / 2,
+          enemy.position.y + stats.height / 2,
+        );
+      }
+
+      const animation = enemyAnimationKey(enemy.kind, enemy.state);
       if (animation !== view.animation) {
         view.sprite.play(animation, true);
         view.animation = animation;
@@ -368,17 +732,53 @@ export class GameScene extends Phaser.Scene {
 
     this.enemyHud.clear();
     for (const enemy of enemies) {
-      if (enemy.state === 'die' || enemy.hp >= ENEMY_MAX_HP) {
+      const stats = statsFor(enemy.kind);
+      if (
+        enemy.kind === 'golem' ||
+        enemy.state === 'die' ||
+        enemy.hp >= stats.maxHp
+      ) {
         continue;
       }
 
-      const x = enemy.position.x + ENEMY_WIDTH / 2 - 24;
-      const y = enemy.position.y - 18;
+      const x = enemy.position.x + stats.width / 2 - 24;
+      const y = enemy.position.y - 16;
       this.enemyHud.fillStyle(0x14181f, 0.9).fillRect(x, y, 48, 7);
       this.enemyHud
         .fillStyle(0xc4453d, 1)
-        .fillRect(x + 1, y + 1, 46 * (enemy.hp / ENEMY_MAX_HP), 5);
+        .fillRect(x + 1, y + 1, 46 * (enemy.hp / stats.maxHp), 5);
     }
+  }
+
+  private renderBossBar(player: Player, enemies: readonly Enemy[]): void {
+    const golem = enemies.find((enemy) => enemy.kind === 'golem');
+    const show =
+      !this.cutsceneActive &&
+      golem !== undefined &&
+      golem.state !== 'die' &&
+      this.simulation.state.mode !== 'victory' &&
+      player.position.x > golem.position.x - 850;
+
+    this.bossName.setVisible(show);
+    this.bossHud.clear();
+    if (!show || !golem) {
+      return;
+    }
+
+    const maxHp = statsFor('golem').maxHp;
+    const barWidth = 600;
+    const barHeight = 18;
+    const x = this.scale.width / 2 - barWidth / 2;
+    const y = 56;
+
+    this.bossHud.fillStyle(0x0b0d10, 0.86).fillRect(x - 6, y - 6, barWidth + 12, barHeight + 12);
+    this.bossHud.fillStyle(0x3a1d1a, 1).fillRect(x, y, barWidth, barHeight);
+    this.bossHud
+      .fillStyle(0xb43c32, 1)
+      .fillRect(x + 2, y + 2, (barWidth - 4) * (golem.hp / maxHp), barHeight - 4);
+    this.bossHud
+      .lineStyle(2, 0xd8b46a, 0.85)
+      .strokeRect(x - 3, y - 3, barWidth + 6, barHeight + 6);
   }
 
   private renderCombatFx(player: Player, enemies: readonly Enemy[]): void {
@@ -429,17 +829,76 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const cx = enemy.position.x + ENEMY_WIDTH / 2;
-      const cy = enemy.position.y + ENEMY_HEIGHT * 0.45;
+      const stats = statsFor(enemy.kind);
+      const cx = enemy.position.x + stats.width / 2;
+      const cy = enemy.position.y + stats.height * 0.45;
       const start = enemy.facing === 1 ? -0.9 : Math.PI - 0.9;
       const end = enemy.facing === 1 ? 0.9 : Math.PI + 0.9;
 
       this.attackFx
         .lineStyle(6, 0xffb08a, 0.75)
         .beginPath()
-        .arc(cx, cy, 60, start, end)
+        .arc(cx, cy, Math.max(44, stats.attackReach * 0.9), start, end)
         .strokePath();
     }
+  }
+
+  private updateSfx(player: Player, enemies: readonly Enemy[]): void {
+    if (this.lastPlayerState !== null && player.state !== this.lastPlayerState) {
+      if (player.state === 'jump') {
+        this.sfx.jump();
+      } else if (player.state === 'attack') {
+        this.sfx.swing();
+      } else if (player.state === 'guard') {
+        this.sfx.guard();
+      }
+    }
+
+    if (!this.lastPlayerGrounded && player.grounded && player.state !== 'die') {
+      this.sfx.land();
+    }
+    this.lastPlayerState = player.state;
+    this.lastPlayerGrounded = player.grounded;
+
+    enemies.forEach((enemy, index) => {
+      const previous = this.lastEnemyStates[index];
+      if (
+        previous !== undefined &&
+        previous !== enemy.state &&
+        enemy.state === 'attack'
+      ) {
+        this.sfx.enemySwing(enemy.kind);
+      }
+      this.lastEnemyStates[index] = enemy.state;
+    });
+  }
+
+  private createGlowTexture(): void {
+    if (this.textures.exists('boss-glow')) {
+      return;
+    }
+
+    const size = 512;
+    const texture = this.textures.createCanvas('boss-glow', size, size);
+    if (!texture) {
+      return;
+    }
+
+    const context = texture.getContext();
+    const gradient = context.createRadialGradient(
+      size / 2,
+      size / 2,
+      0,
+      size / 2,
+      size / 2,
+      size / 2,
+    );
+    gradient.addColorStop(0, 'rgba(255, 244, 200, 0.95)');
+    gradient.addColorStop(0.35, 'rgba(255, 214, 120, 0.45)');
+    gradient.addColorStop(1, 'rgba(255, 180, 60, 0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    texture.refresh();
   }
 
   private drawSpikes(level: Level): void {

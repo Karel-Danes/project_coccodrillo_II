@@ -35,7 +35,9 @@ export class TouchControls {
     guardHeld: false,
   };
 
-  private readonly objects: Phaser.GameObjects.GameObject[] = [];
+  private readonly objects: Array<
+    Phaser.GameObjects.Shape | Phaser.GameObjects.Text
+  > = [];
   private readonly cleanups: Array<() => void> = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -66,6 +68,12 @@ export class TouchControls {
     }
     this.cleanups.length = 0;
     this.objects.length = 0;
+  }
+
+  setVisible(visible: boolean): void {
+    for (const object of this.objects) {
+      object.setVisible(visible);
+    }
   }
 
   private createButton(

@@ -10,6 +10,9 @@
 /** 60 simulated steps per second. */
 export const FIXED_TIMESTEP_MS = 1000 / 60;
 
+/** The same fixed step expressed in seconds, for physics formulas. */
+export const FIXED_DT_SECONDS = FIXED_TIMESTEP_MS / 1000;
+
 /**
  * Longest real-time delta a single frame may contribute. Prevents the
  * "spiral of death" (and tunneling) after a tab switch, breakpoint, or

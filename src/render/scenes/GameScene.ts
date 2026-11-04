@@ -1,56 +1,230 @@
 import Phaser from 'phaser';
 import type { GameEventBus } from '../../bridge/events';
+import { publishEvents } from '../../bridge/publish';
+import { tileAt } from '../../game/level';
+import { LEVEL_01 } from '../../game/levels';
 import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
+import { PLAYER_HEIGHT, PLAYER_WIDTH } from '../../game/player';
+import { Simulation } from '../../game/simulation';
+import type { DeathReason, Level, Player } from '../../game/types';
+
+const COLORS = {
+  solid: 0x222b36,
+  solidTop: 0x3d4d60,
+  spike: 0x9aa4ae,
+  player: 0xd7c8a8,
+  playerDead: 0x7a3a3a,
+  playerEye: 0x2a2018,
+} as const;
 
 /**
- * Render layer only: drives the fixed-step clock, draws the current state.
- * Game rules live in `src/game/` and will be wired in through the bridge.
+ * Render layer only: draws the simulation state, feeds it input, and turns
+ * domain events into presentation. All rules live in `src/game/`.
  */
 export class GameScene extends Phaser.Scene {
   private readonly loop = new FixedStepLoop(FIXED_TIMESTEP_MS);
+  private simulation = new Simulation(LEVEL_01);
   private tick = 0;
-  private debugText?: Phaser.GameObjects.Text;
+
+  private playerBody!: Phaser.GameObjects.Rectangle;
+  private playerEye!: Phaser.GameObjects.Rectangle;
+  private debugText!: Phaser.GameObjects.Text;
+  private deathShade!: Phaser.GameObjects.Rectangle;
+  private deathText!: Phaser.GameObjects.Text;
+
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private keyA!: Phaser.Input.Keyboard.Key;
+  private keyD!: Phaser.Input.Keyboard.Key;
+  private keyR!: Phaser.Input.Keyboard.Key;
 
   constructor(private readonly bus: GameEventBus) {
     super({ key: 'GameScene' });
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor('#0d0f12');
+    const level = this.simulation.level;
+    const width = level.cols * level.tileSize;
+    const height = level.rows * level.tileSize;
+
+    this.cameras.main.setBackgroundColor('#0b0d10');
+    this.drawLevel(level);
+
+    this.playerBody = this.add
+      .rectangle(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, COLORS.player)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x6b5c44)
+      .setDepth(10);
+
+    this.playerEye = this.add
+      .rectangle(0, 0, 7, 7, COLORS.playerEye)
+      .setOrigin(0, 0)
+      .setDepth(11);
+
+    this.add
+      .text(16, height - 34, '← → / A D  walk    SPACE  jump    R  restart', {
+        fontFamily: 'monospace',
+        fontSize: '16px',
+        color: '#5f6b78',
+      })
+      .setDepth(20);
 
     this.debugText = this.add
-      .text(24, 24, '', {
+      .text(16, 14, '', {
         fontFamily: 'monospace',
-        fontSize: '18px',
-        color: '#8b98a5',
-        lineSpacing: 6,
+        fontSize: '15px',
+        color: '#7f8b98',
+        lineSpacing: 4,
       })
-      .setDepth(1);
+      .setDepth(20);
 
-    this.renderDebug();
+    this.deathShade = this.add
+      .rectangle(0, 0, width, height, 0x000000, 0.55)
+      .setOrigin(0, 0)
+      .setDepth(25)
+      .setVisible(false);
+
+    this.deathText = this.add
+      .text(width / 2, height / 2, '', {
+        fontFamily: 'monospace',
+        fontSize: '32px',
+        color: '#e8dcc0',
+        align: 'center',
+        lineSpacing: 12,
+      })
+      .setOrigin(0.5)
+      .setDepth(26)
+      .setVisible(false);
+
+    const keyboard = this.input.keyboard;
+    if (keyboard === null) {
+      throw new Error('Keyboard input is not available in this environment');
+    }
+    this.cursors = keyboard.createCursorKeys();
+    this.keyA = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this.keyD = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keyR = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+
+    this.bus.on('playerDied', this.onPlayerDied, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.bus.off('playerDied', this.onPlayerDied, this);
+    });
+
     this.bus.emit('sceneReady');
+    this.render();
   }
 
   override update(_time: number, delta: number): void {
-    const steps = this.loop.advance(delta, () => this.step());
-
-    // Repaint the overlay at render rate, not simulation rate.
-    if (steps > 0) {
-      this.renderDebug();
+    if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
+      this.restart();
     }
+
+    this.simulation.setInput({
+      left: this.cursors.left.isDown || this.keyA.isDown,
+      right: this.cursors.right.isDown || this.keyD.isDown,
+      jumpHeld: this.cursors.space.isDown || this.cursors.up.isDown,
+    });
+
+    this.loop.advance(delta, () => {
+      const events = this.simulation.step();
+      publishEvents(this.bus, events);
+      this.tick += 1;
+    });
+
+    this.render();
   }
 
-  /** One deterministic simulation step. Gameplay systems hook in here later. */
-  private step(): void {
-    this.tick += 1;
+  private onPlayerDied(reason: DeathReason): void {
+    this.deathText.setText(
+      reason === 'spikes'
+        ? 'IMPALED\nPRESS R TO RETRY'
+        : 'LOST TO THE VOID\nPRESS R TO RETRY',
+    );
+    this.deathShade.setVisible(true);
+    this.deathText.setVisible(true);
+    this.playerBody.setFillStyle(COLORS.playerDead);
+    this.playerEye.setVisible(false);
   }
 
-  private renderDebug(): void {
-    const hz = Math.round(1000 / FIXED_TIMESTEP_MS);
-    this.debugText?.setText([
-      'COCCODRILLO-II',
-      `milestone 1 scaffold — fixed step ${hz} Hz`,
-      `tick ${this.tick} · alpha ${this.loop.alpha.toFixed(2)}`,
+  private restart(): void {
+    this.simulation = new Simulation(LEVEL_01);
+    this.loop.reset();
+    this.tick = 0;
+
+    this.deathShade.setVisible(false);
+    this.deathText.setVisible(false);
+    this.playerBody.setFillStyle(COLORS.player);
+    this.playerEye.setVisible(true);
+
+    this.render();
+  }
+
+  private render(): void {
+    const { player } = this.simulation.state;
+    this.renderPlayer(player);
+
+    this.debugText.setText([
+      'COCCODRILLO-II — MILESTONE 1',
+      `state ${player.state} · grounded ${player.grounded ? 'yes' : 'no'}`,
+      `pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
+      `tick ${this.tick}`,
     ]);
+  }
+
+  private renderPlayer(player: Player): void {
+    this.playerBody.setPosition(player.position.x, player.position.y);
+
+    const eyeX =
+      player.facing === 1
+        ? player.position.x + PLAYER_WIDTH - 14
+        : player.position.x + 7;
+    this.playerEye.setPosition(eyeX, player.position.y + 14);
+  }
+
+  private drawLevel(level: Level): void {
+    const graphics = this.add.graphics().setDepth(0);
+    const { tileSize } = level;
+
+    for (let row = 0; row < level.rows; row += 1) {
+      for (let col = 0; col < level.cols; col += 1) {
+        const x = col * tileSize;
+        const y = row * tileSize;
+
+        switch (tileAt(level, col, row)) {
+          case 'solid': {
+            graphics.fillStyle(COLORS.solid, 1).fillRect(x, y, tileSize, tileSize);
+            graphics
+              .lineStyle(1, 0x2b3644, 1)
+              .strokeRect(x + 0.5, y + 0.5, tileSize - 1, tileSize - 1);
+
+            if (tileAt(level, col, row - 1) !== 'solid') {
+              graphics
+                .fillStyle(COLORS.solidTop, 1)
+                .fillRect(x, y, tileSize, 4);
+            }
+            break;
+          }
+          case 'spike': {
+            // Four triangles per tile, rising from the floor.
+            const count = 4;
+            const spikeWidth = tileSize / count;
+            graphics.fillStyle(COLORS.spike, 1);
+            for (let i = 0; i < count; i += 1) {
+              const left = x + i * spikeWidth;
+              graphics.fillTriangle(
+                left,
+                y + tileSize,
+                left + spikeWidth / 2,
+                y + tileSize * 0.55,
+                left + spikeWidth,
+                y + tileSize,
+              );
+            }
+            break;
+          }
+          case 'empty':
+            break;
+        }
+      }
+    }
   }
 }

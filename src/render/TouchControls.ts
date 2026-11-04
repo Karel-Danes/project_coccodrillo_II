@@ -11,14 +11,14 @@ const ACTIVE_ALPHA = 0.9;
 function labelSize(key: HoldKey): string {
   switch (key) {
     case 'jumpHeld':
-      return '18px';
+      return '21px';
     case 'attackHeld':
-      return '16px';
+      return '18px';
     case 'guardHeld':
-      return '13px';
+      return '15px';
     case 'left':
     case 'right':
-      return '26px';
+      return '30px';
   }
 }
 
@@ -48,15 +48,15 @@ export class TouchControls {
 
     const height = this.scene.scale.height;
     const width = this.scene.scale.width;
-    // Keep the controls below the walking surface so they never cover the knight.
-    const bottom = height - 64;
+    // Larger touch targets, raised a little off the bottom edge.
+    const bottom = height - 98;
 
     // Movement on the left, combat and jump on the right.
-    this.createButton(165, bottom, 48, '◀', 'left');
-    this.createButton(315, bottom, 48, '▶', 'right');
-    this.createButton(width - 390, bottom, 44, 'GUARD', 'guardHeld');
-    this.createButton(width - 265, bottom, 48, 'ATK', 'attackHeld');
-    this.createButton(width - 125, bottom, 58, 'JUMP', 'jumpHeld');
+    this.createButton(165, bottom, 58, '◀', 'left');
+    this.createButton(315, bottom, 58, '▶', 'right');
+    this.createButton(width - 420, bottom, 54, 'GUARD', 'guardHeld');
+    this.createButton(width - 285, bottom, 58, 'ATK', 'attackHeld');
+    this.createButton(width - 130, bottom, 68, 'JUMP', 'jumpHeld');
   }
 
   destroy(): void {

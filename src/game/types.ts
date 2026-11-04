@@ -12,7 +12,14 @@ export type AABB = {
 /** Every character faces right in the source art; -1 means mirrored. */
 export type Facing = -1 | 1;
 
-export type PlayerState = 'idle' | 'walk' | 'jump' | 'fall' | 'die';
+export type PlayerState =
+  | 'idle'
+  | 'walk'
+  | 'jump'
+  | 'fall'
+  | 'attack'
+  | 'guard'
+  | 'die';
 
 export type DeathReason = 'spikes' | 'fall';
 
@@ -35,12 +42,16 @@ export type Player = {
   velocity: Vec2;
   facing: Facing;
   grounded: boolean;
+  /** Seconds spent in the current state; drives the attack timing. */
+  stateTime: number;
 };
 
 export type InputState = {
   left: boolean;
   right: boolean;
   jumpHeld: boolean;
+  attackHeld: boolean;
+  guardHeld: boolean;
 };
 
 export type GameStatus = 'playing' | 'dead';

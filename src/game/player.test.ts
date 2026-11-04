@@ -1,19 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { parseLevel } from './level';
 import {
+  ATTACK_REACH,
+  blocksDamage,
   createPlayer,
+  getAttackHitbox,
+  getAttackPhase,
   GRAVITY,
   PLAYER_WIDTH,
   stepPlayer,
   WALK_SPEED,
   type PlayerStepContext,
 } from './player';
-import type { InputState, Level, Player } from './types';
+import type { AABB, InputState, Level, Player } from './types';
 
 const DT_SECONDS = 1 / 60;
 
-const IDLE: InputState = { left: false, right: false, jumpHeld: false };
-const RIGHT: InputState = { left: false, right: true, jumpHeld: false };
+const NO_INPUT: InputState = {
+  left: false,
+  right: false,
+  jumpHeld: false,
+  attackHeld: false,
+  guardHeld: false,
+};
+const IDLE = NO_INPUT;
+const RIGHT: InputState = { ...NO_INPUT, right: true };
+const GUARD: InputState = { ...NO_INPUT, guardHeld: true };
+const GUARD_RIGHT: InputState = { ...NO_INPUT, right: true, guardHeld: true };
 
 function flatLevel(): Level {
   return parseLevel(
@@ -27,11 +40,13 @@ function step(
   level: Level,
   input: InputState,
   jumpPressed = false,
+  attackPressed = false,
 ): Player {
   const context: PlayerStepContext = {
     level,
     input,
     jumpPressed,
+    attackPressed,
     dtSeconds: DT_SECONDS,
   };
   return stepPlayer(player, context);
@@ -58,9 +73,8 @@ describe('player state machine', () => {
 
     const takeoffX = jumping.position.x;
     const airborne = step(jumping, level, {
+      ...NO_INPUT,
       left: true,
-      right: false,
-      jumpHeld: false,
     });
 
     expect(airborne.state).toBe('jump');
@@ -144,5 +158,139 @@ describe('player state machine', () => {
     const wallX = 9 * level.tileSize;
     expect(player.position.x + PLAYER_WIDTH).toBeCloseTo(wallX);
     expect(player.grounded).toBe(true);
+  });
+});
+
+describe('sword and guard', () => {
+  it('commits to a sword attack and cannot walk out of it', () => {
+    const level = flatLevel();
+    const attacking = step(settle(level), level, RIGHT, false, true);
+
+    expect(attacking.state).toBe('attack');
+    expect(attacking.velocity.x).toBe(0);
+    expect(attacking.stateTime).toBe(0);
+    expect(getAttackPhase(attacking)).toBe('startup');
+    expect(getAttackHitbox(attacking)).toBeNull();
+
+    const startX = attacking.position.x;
+    let player = attacking;
+    for (let i = 0; i < 10; i += 1) {
+      player = step(player, level, RIGHT);
+    }
+
+    expect(player.state).toBe('attack');
+    expect(player.position.x).toBeCloseTo(startX);
+  });
+
+  it('only exposes the sword hitbox during the active window', () => {
+    const level = flatLevel();
+    let player = step(settle(level), level, IDLE, false, true);
+    const startX = player.position.x;
+    const phases = new Set<string>();
+    let activeHitbox: AABB | null = null;
+
+    for (let i = 0; i < 60 && player.state === 'attack'; i += 1) {
+      const phase = getAttackPhase(player);
+      if (phase !== null) {
+        phases.add(phase);
+      }
+      const hitbox = getAttackHitbox(player);
+      if (hitbox !== null) {
+        activeHitbox = hitbox;
+      }
+      player = step(player, level, IDLE);
+    }
+
+    expect(phases.has('startup')).toBe(true);
+    expect(phases.has('active')).toBe(true);
+    expect(phases.has('recovery')).toBe(true);
+    expect(activeHitbox).not.toBeNull();
+    expect(activeHitbox!.x).toBeCloseTo(startX + PLAYER_WIDTH);
+    expect(activeHitbox!.width).toBe(ATTACK_REACH);
+  });
+
+  it('throws the hitbox on the facing side', () => {
+    const level = flatLevel();
+    const facingLeft = step(settle(level), level, {
+      ...NO_INPUT,
+      left: true,
+    });
+    expect(facingLeft.facing).toBe(-1);
+
+    let player = step(facingLeft, level, NO_INPUT, false, true);
+    let hitbox: AABB | null = null;
+    for (let i = 0; i < 30 && player.state === 'attack'; i += 1) {
+      hitbox = getAttackHitbox(player);
+      if (hitbox !== null) {
+        break;
+      }
+      player = step(player, level, NO_INPUT);
+    }
+
+    expect(hitbox).not.toBeNull();
+    expect(hitbox!.x).toBeCloseTo(player.position.x - ATTACK_REACH);
+  });
+
+  it('does not allow attacks in mid-air', () => {
+    const level = flatLevel();
+    const jumping = step(settle(level), level, IDLE, true);
+    expect(jumping.state).toBe('jump');
+
+    const attempting = step(jumping, level, NO_INPUT, false, true);
+    expect(attempting.state).toBe('jump');
+    expect(getAttackPhase(attempting)).toBeNull();
+  });
+
+  it('holds guard without moving and blocks damage', () => {
+    const level = flatLevel();
+    const guarding = step(settle(level), level, GUARD);
+    expect(guarding.state).toBe('guard');
+    expect(blocksDamage(guarding)).toBe(true);
+
+    const startX = guarding.position.x;
+    let player = guarding;
+    for (let i = 0; i < 12; i += 1) {
+      player = step(player, level, GUARD_RIGHT);
+    }
+
+    expect(player.state).toBe('guard');
+    expect(player.position.x).toBeCloseTo(startX);
+
+    const turned = step(player, level, {
+      ...NO_INPUT,
+      left: true,
+      guardHeld: true,
+    });
+    expect(turned.facing).toBe(-1);
+    expect(turned.position.x).toBeCloseTo(startX);
+
+    const released = step(turned, level, NO_INPUT);
+    expect(released.state).toBe('idle');
+    expect(blocksDamage(released)).toBe(false);
+  });
+
+  it('can strike out of guard but cannot guard in the air', () => {
+    const level = flatLevel();
+    const guarding = step(settle(level), level, GUARD);
+    const attacking = step(guarding, level, GUARD, false, true);
+    expect(attacking.state).toBe('attack');
+
+    const jumping = step(settle(level), level, IDLE, true);
+    const guardMidair = step(jumping, level, GUARD);
+    expect(guardMidair.state).toBe('jump');
+    expect(blocksDamage(guardMidair)).toBe(false);
+  });
+
+  it('returns to guard after a swing when guard is still held', () => {
+    const level = flatLevel();
+    let player = step(settle(level), level, GUARD);
+    player = step(player, level, GUARD, false, true);
+
+    for (let i = 0; i < 60 && player.state === 'attack'; i += 1) {
+      player = step(player, level, GUARD);
+    }
+
+    expect(player.state).toBe('guard');
+    expect(blocksDamage(player)).toBe(true);
   });
 });

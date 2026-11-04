@@ -4,30 +4,38 @@ import type { Level } from './types';
 export const TILE_SIZE = 64;
 
 /**
- * Milestone-1 room: 20 x 12 tiles.
+ * World 01: 60 x 18 tiles (3840 x 1152 px). The camera viewport shows
+ * 20 x 12 tiles, so the world scrolls three screens wide and roughly one
+ * and a half screens tall.
  *
- * Route: climb the three platforms on the left (each one tile up and at
- * most one tile across), drop down on the right, jump the spike pit, and
- * either stop or walk into the hole that drops out of the world. Nothing
- * hangs over the spike pit, so the jump is physically possible.
+ * Route: ground start, first block, spike pit, left staircase up to a high
+ * ledge, drop back down, mid platform, second spike pit, right staircase,
+ * and a final high ledge. Every climb is one tile up with at most one tile
+ * of horizontal gap.
  */
-const LEVEL_01_ASCII = [
-  '####################',
-  '#..................#',
-  '#..................#',
-  '#..................#',
-  '#..................#',
-  '#..................#',
-  '#..................#',
-  '#..................#',
-  '#........###.......#',
-  '#....###...........#',
-  '#..##..............#',
-  '##############^##..#',
+const WORLD_01_ASCII = [
+  '############################################################',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#..........................................................#',
+  '#...........................###........................###.#',
+  '#.......................###........................###.....#',
+  '#...................###.............###........###.........#',
+  '#...............###........................###.............#',
+  '#....##......##.........................##.................#',
+  '##########.#######################.#########################',
+  '##########^#######################^#########################',
 ] as const;
 
-export const LEVEL_01: Level = parseLevel(LEVEL_01_ASCII, {
+export const LEVEL_01: Level = parseLevel(WORLD_01_ASCII, {
   tileSize: TILE_SIZE,
-  // Standing on the floor in the second column, clear of the left wall.
-  spawn: { x: 92, y: 616 },
+  // Standing on the ground in the third column.
+  spawn: { x: 140, y: 936 },
 });

@@ -29,8 +29,15 @@ export class Simulation {
   private status: GameStatus = 'playing';
   private deathReason: DeathReason | null = null;
 
-  private input: InputState = { left: false, right: false, jumpHeld: false };
+  private input: InputState = {
+    left: false,
+    right: false,
+    jumpHeld: false,
+    attackHeld: false,
+    guardHeld: false,
+  };
   private jumpHeldPrevious = false;
+  private attackHeldPrevious = false;
 
   constructor(readonly level: Level) {
     this.player = createPlayer(level.spawn);
@@ -57,14 +64,17 @@ export class Simulation {
       return NO_EVENTS;
     }
 
-    // Edge detection keeps a held jump from repeatedly firing.
+    // Edge detection keeps a held jump or attack from repeatedly firing.
     const jumpPressed = this.input.jumpHeld && !this.jumpHeldPrevious;
     this.jumpHeldPrevious = this.input.jumpHeld;
+    const attackPressed = this.input.attackHeld && !this.attackHeldPrevious;
+    this.attackHeldPrevious = this.input.attackHeld;
 
     let player = stepPlayer(this.player, {
       level: this.level,
       input: this.input,
       jumpPressed,
+      attackPressed,
       dtSeconds: FIXED_DT_SECONDS,
     });
 

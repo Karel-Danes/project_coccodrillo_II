@@ -1,6 +1,12 @@
 import Phaser from 'phaser';
 import type { GameEventBus } from '../../bridge/events';
 import { publishEvents } from '../../bridge/publish';
+import {
+  ENEMY_HEIGHT,
+  ENEMY_MAX_HP,
+  ENEMY_WIDTH,
+  getEnemyAttackPhase,
+} from '../../game/enemy';
 import { tileAt } from '../../game/level';
 import { LEVEL_01 } from '../../game/levels';
 import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
@@ -10,18 +16,34 @@ import {
   PLAYER_WIDTH,
 } from '../../game/player';
 import { Simulation } from '../../game/simulation';
-import type { DeathReason, Level, Player, PlayerState } from '../../game/types';
+import type {
+  DeathReason,
+  Enemy,
+  EnemyState,
+  Level,
+  Player,
+  PlayerState,
+} from '../../game/types';
 import {
   KNIGHT_FEET_Y,
   KNIGHT_FRAME_HEIGHT,
   KNIGHT_SCALE,
 } from '../assets/knight';
+import {
+  SKELETON_FEET_Y,
+  SKELETON_FRAME_HEIGHT,
+  SKELETON_SCALE,
+  SKELETON_TEXTURES,
+} from '../assets/skeleton';
 import { loadKnightAssets, registerKnightAnimations } from '../knightAnimations';
+import {
+  loadSkeletonAssets,
+  registerSkeletonAnimations,
+} from '../skeletonAnimations';
+import { createTerrainTexture, loadTerrainAssets } from '../terrain';
 import { TouchControls } from '../TouchControls';
 
 const COLORS = {
-  solid: 0x222b36,
-  solidTop: 0x3d4d60,
   spike: 0x9aa4ae,
 } as const;
 
@@ -33,6 +55,19 @@ const PLAYER_ANIMATION: Record<PlayerState, string> = {
   attack: 'knight-attack',
   guard: 'knight-guard',
   die: 'knight-death',
+};
+
+const ENEMY_ANIMATION: Record<EnemyState, string> = {
+  idle: 'skeleton-idle',
+  walk: 'skeleton-walk',
+  attack: 'skeleton-attack',
+  hurt: 'skeleton-hurt',
+  die: 'skeleton-death',
+};
+
+type EnemyView = {
+  sprite: Phaser.GameObjects.Sprite;
+  animation: string;
 };
 
 /**
@@ -48,6 +83,9 @@ export class GameScene extends Phaser.Scene {
   private cameraFocus!: Phaser.GameObjects.Zone;
   private currentAnimation = '';
   private touchControls: TouchControls | null = null;
+
+  private enemyViews: EnemyView[] = [];
+  private enemyHud!: Phaser.GameObjects.Graphics;
 
   private guardFx!: Phaser.GameObjects.Graphics;
   private attackFx!: Phaser.GameObjects.Graphics;
@@ -70,6 +108,8 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     loadKnightAssets(this);
+    loadSkeletonAssets(this);
+    loadTerrainAssets(this);
   }
 
   create(): void {
@@ -81,8 +121,12 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#0b0d10');
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
-    this.drawLevel(level);
+
+    createTerrainTexture(this, level);
+    this.drawSpikes(level);
+
     registerKnightAnimations(this);
+    registerSkeletonAnimations(this);
 
     this.playerSprite = this.add
       .sprite(0, 0, 'knight-idle')
@@ -90,8 +134,18 @@ export class GameScene extends Phaser.Scene {
       .setScale(KNIGHT_SCALE)
       .setDepth(10);
 
+    this.enemyViews = this.simulation.state.enemies.map(() => ({
+      sprite: this.add
+        .sprite(0, 0, SKELETON_TEXTURES.idle)
+        .setOrigin(0.5, SKELETON_FEET_Y / SKELETON_FRAME_HEIGHT)
+        .setScale(SKELETON_SCALE)
+        .setDepth(9),
+      animation: '',
+    }));
+
     this.guardFx = this.add.graphics().setDepth(9);
     this.attackFx = this.add.graphics().setDepth(11);
+    this.enemyHud = this.add.graphics().setDepth(12);
 
     this.cameraFocus = this.add.zone(0, 0, 1, 1);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
@@ -105,7 +159,9 @@ export class GameScene extends Phaser.Scene {
         {
           fontFamily: 'monospace',
           fontSize: '16px',
-          color: '#5f6b78',
+          color: '#8b98a5',
+          backgroundColor: 'rgba(11, 13, 16, 0.78)',
+          padding: { x: 8, y: 6 },
         },
       )
       .setScrollFactor(0)
@@ -115,7 +171,9 @@ export class GameScene extends Phaser.Scene {
       .text(16, 14, '', {
         fontFamily: 'monospace',
         fontSize: '15px',
-        color: '#7f8b98',
+        color: '#aab6c2',
+        backgroundColor: 'rgba(11, 13, 16, 0.78)',
+        padding: { x: 8, y: 6 },
         lineSpacing: 4,
       })
       .setScrollFactor(0)
@@ -209,11 +267,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onPlayerDied(reason: DeathReason): void {
-    this.deathText.setText(
+    const title =
       reason === 'spikes'
-        ? 'IMPALED\nTAP OR PRESS R TO RETRY'
-        : 'LOST TO THE VOID\nTAP OR PRESS R TO RETRY',
-    );
+        ? 'IMPALED'
+        : reason === 'sword'
+          ? 'SLAIN'
+          : 'LOST TO THE VOID';
+    this.deathText.setText(`${title}\nTAP OR PRESS R TO RETRY`);
     this.deathShade.setVisible(true);
     this.deathText.setVisible(true);
   }
@@ -228,6 +288,11 @@ export class GameScene extends Phaser.Scene {
     this.deathText.setVisible(false);
     this.guardFx.clear();
     this.attackFx.clear();
+    this.enemyHud.clear();
+    for (const view of this.enemyViews) {
+      view.animation = '';
+      view.sprite.setVisible(true);
+    }
 
     this.centerCameraOnPlayer();
     this.render();
@@ -243,19 +308,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private render(): void {
-    const { player } = this.simulation.state;
+    const { player, enemies } = this.simulation.state;
     this.renderPlayer(player);
-    this.renderCombatFx(player);
+    this.renderEnemies(enemies);
+    this.renderCombatFx(player, enemies);
 
     this.cameraFocus.setPosition(
       player.position.x + PLAYER_WIDTH / 2,
       player.position.y + PLAYER_HEIGHT / 2,
     );
 
+    const enemy = enemies[0];
     this.debugText.setText([
       'COCCODRILLO-II — WORLD 01',
       `state ${player.state} · grounded ${player.grounded ? 'yes' : 'no'}`,
       `pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
+      enemy
+        ? `skeleton ${enemy.state} · hp ${enemy.hp}/${ENEMY_MAX_HP}`
+        : 'skeleton —',
       `cam ${this.cameras.main.scrollX.toFixed(0)}, ${this.cameras.main.scrollY.toFixed(0)} · tick ${this.tick}`,
     ]);
   }
@@ -274,7 +344,44 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private renderCombatFx(player: Player): void {
+  private renderEnemies(enemies: readonly Enemy[]): void {
+    this.enemyViews.forEach((view, index) => {
+      const enemy = enemies[index];
+      if (!enemy) {
+        view.sprite.setVisible(false);
+        return;
+      }
+
+      view.sprite.setVisible(true);
+      view.sprite.setPosition(
+        enemy.position.x + ENEMY_WIDTH / 2,
+        enemy.position.y + ENEMY_HEIGHT,
+      );
+      view.sprite.setFlipX(enemy.facing === -1);
+
+      const animation = ENEMY_ANIMATION[enemy.state];
+      if (animation !== view.animation) {
+        view.sprite.play(animation, true);
+        view.animation = animation;
+      }
+    });
+
+    this.enemyHud.clear();
+    for (const enemy of enemies) {
+      if (enemy.state === 'die' || enemy.hp >= ENEMY_MAX_HP) {
+        continue;
+      }
+
+      const x = enemy.position.x + ENEMY_WIDTH / 2 - 24;
+      const y = enemy.position.y - 18;
+      this.enemyHud.fillStyle(0x14181f, 0.9).fillRect(x, y, 48, 7);
+      this.enemyHud
+        .fillStyle(0xc4453d, 1)
+        .fillRect(x + 1, y + 1, 46 * (enemy.hp / ENEMY_MAX_HP), 5);
+    }
+  }
+
+  private renderCombatFx(player: Player, enemies: readonly Enemy[]): void {
     this.guardFx.clear();
     this.attackFx.clear();
 
@@ -316,51 +423,50 @@ export class GameScene extends Phaser.Scene {
         .arc(cx, cy, 54, start, end)
         .strokePath();
     }
+
+    for (const enemy of enemies) {
+      if (getEnemyAttackPhase(enemy) !== 'active') {
+        continue;
+      }
+
+      const cx = enemy.position.x + ENEMY_WIDTH / 2;
+      const cy = enemy.position.y + ENEMY_HEIGHT * 0.45;
+      const start = enemy.facing === 1 ? -0.9 : Math.PI - 0.9;
+      const end = enemy.facing === 1 ? 0.9 : Math.PI + 0.9;
+
+      this.attackFx
+        .lineStyle(6, 0xffb08a, 0.75)
+        .beginPath()
+        .arc(cx, cy, 60, start, end)
+        .strokePath();
+    }
   }
 
-  private drawLevel(level: Level): void {
-    const graphics = this.add.graphics().setDepth(0);
+  private drawSpikes(level: Level): void {
+    const graphics = this.add.graphics().setDepth(1);
     const { tileSize } = level;
 
     for (let row = 0; row < level.rows; row += 1) {
       for (let col = 0; col < level.cols; col += 1) {
+        if (tileAt(level, col, row) !== 'spike') {
+          continue;
+        }
+
         const x = col * tileSize;
         const y = row * tileSize;
-
-        switch (tileAt(level, col, row)) {
-          case 'solid': {
-            graphics.fillStyle(COLORS.solid, 1).fillRect(x, y, tileSize, tileSize);
-            graphics
-              .lineStyle(1, 0x2b3644, 1)
-              .strokeRect(x + 0.5, y + 0.5, tileSize - 1, tileSize - 1);
-
-            if (tileAt(level, col, row - 1) !== 'solid') {
-              graphics
-                .fillStyle(COLORS.solidTop, 1)
-                .fillRect(x, y, tileSize, 4);
-            }
-            break;
-          }
-          case 'spike': {
-            // Four triangles per tile, rising from the floor.
-            const count = 4;
-            const spikeWidth = tileSize / count;
-            graphics.fillStyle(COLORS.spike, 1);
-            for (let i = 0; i < count; i += 1) {
-              const left = x + i * spikeWidth;
-              graphics.fillTriangle(
-                left,
-                y + tileSize,
-                left + spikeWidth / 2,
-                y + tileSize * 0.55,
-                left + spikeWidth,
-                y + tileSize,
-              );
-            }
-            break;
-          }
-          case 'empty':
-            break;
+        const count = 4;
+        const spikeWidth = tileSize / count;
+        graphics.fillStyle(COLORS.spike, 1);
+        for (let i = 0; i < count; i += 1) {
+          const left = x + i * spikeWidth;
+          graphics.fillTriangle(
+            left,
+            y + tileSize,
+            left + spikeWidth / 2,
+            y + tileSize * 0.55,
+            left + spikeWidth,
+            y + tileSize,
+          );
         }
       }
     }

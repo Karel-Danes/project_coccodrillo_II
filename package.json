@@ -1,0 +1,25 @@
+{
+  "name": "coccodrillo-ii",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Coccodrillo-II — a cinematic rotoscoped platformer.",
+  "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "eventemitter3": "^5.0.4",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
+  }
+}

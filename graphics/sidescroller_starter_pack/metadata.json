@@ -1,0 +1,1236 @@
+{
+  "counts": {
+    "animation_frames": 512,
+    "clips_per_species": 6,
+    "species": 16,
+    "static_frames": 16
+  },
+  "facing": "Every character faces right; flip in-engine (flipX) for left. No left-facing frames are baked in (that would double the atlas). Mirrored from left-facing sources: ['Mage', 'Wraith'] · symmetric, no facing: ['Slime'].",
+  "frame_policy": {
+    "f0_dropped": true,
+    "reason": "The generator's first frame repeats the input pose, so it is dropped from every clip; the standing pose ships separately as <Id>_static.png."
+  },
+  "pack": "sidescroller_starter_pack",
+  "species": {
+    "Adventurer": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            85,
+            94
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Adventurer_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            85,
+            94
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Adventurer_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            85,
+            94
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Adventurer_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            85,
+            94
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Adventurer_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            85,
+            94
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Adventurer_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            85,
+            94
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Adventurer_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        85,
+        94
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Adventurer/Adventurer_static.png",
+      "static_small": "frames/Adventurer/Adventurer_static_small.png"
+    },
+    "Bat": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            89,
+            60
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Bat_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            89,
+            60
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Bat_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            89,
+            60
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Bat_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            89,
+            60
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Bat_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            89,
+            60
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Bat_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            89,
+            60
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Bat_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        89,
+        60
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Bat/Bat_static.png",
+      "static_small": "frames/Bat/Bat_static_small.png"
+    },
+    "DarkKnight": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            128,
+            102
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/DarkKnight_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            128,
+            102
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/DarkKnight_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            128,
+            102
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/DarkKnight_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            128,
+            102
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/DarkKnight_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            128,
+            102
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/DarkKnight_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            128,
+            102
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/DarkKnight_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        128,
+        102
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/DarkKnight/DarkKnight_static.png",
+      "static_small": "frames/DarkKnight/DarkKnight_static_small.png"
+    },
+    "Goblin": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            102,
+            76
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Goblin_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            102,
+            76
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Goblin_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            102,
+            76
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Goblin_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            102,
+            76
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Goblin_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            102,
+            76
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Goblin_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            102,
+            76
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Goblin_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        102,
+        76
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Goblin/Goblin_static.png",
+      "static_small": "frames/Goblin/Goblin_static_small.png"
+    },
+    "Golem": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            123,
+            118
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Golem_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            123,
+            118
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Golem_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            123,
+            118
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Golem_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            123,
+            118
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Golem_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            123,
+            118
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Golem_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            123,
+            118
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Golem_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        123,
+        118
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Golem/Golem_static.png",
+      "static_small": "frames/Golem/Golem_static_small.png"
+    },
+    "Imp": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            100,
+            75
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Imp_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            100,
+            75
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Imp_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            100,
+            75
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Imp_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            100,
+            75
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Imp_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            100,
+            75
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Imp_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            100,
+            75
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Imp_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        100,
+        75
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Imp/Imp_static.png",
+      "static_small": "frames/Imp/Imp_static_small.png"
+    },
+    "Knight": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            104,
+            85
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Knight_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            104,
+            85
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Knight_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            104,
+            85
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Knight_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            104,
+            85
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Knight_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            104,
+            85
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Knight_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            104,
+            85
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Knight_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        104,
+        85
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Knight/Knight_static.png",
+      "static_small": "frames/Knight/Knight_static_small.png"
+    },
+    "Mage": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            98,
+            92
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Mage_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            98,
+            92
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Mage_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            98,
+            92
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Mage_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            98,
+            92
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Mage_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            98,
+            92
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Mage_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            98,
+            92
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Mage_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        98,
+        92
+      ],
+      "facing": "right",
+      "mirrored_from_source": true,
+      "static": "frames/Mage/Mage_static.png",
+      "static_small": "frames/Mage/Mage_static_small.png"
+    },
+    "Merchant": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            95,
+            94
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Merchant_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            95,
+            94
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Merchant_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            95,
+            94
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Merchant_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            95,
+            94
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Merchant_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            95,
+            94
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Merchant_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            95,
+            94
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Merchant_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        95,
+        94
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Merchant/Merchant_static.png",
+      "static_small": "frames/Merchant/Merchant_static_small.png"
+    },
+    "OrcBrute": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            118,
+            98
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/OrcBrute_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            118,
+            98
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/OrcBrute_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            118,
+            98
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/OrcBrute_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            118,
+            98
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/OrcBrute_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            118,
+            98
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/OrcBrute_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            118,
+            98
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/OrcBrute_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        118,
+        98
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/OrcBrute/OrcBrute_static.png",
+      "static_small": "frames/OrcBrute/OrcBrute_static_small.png"
+    },
+    "Rogue": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            88,
+            93
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Rogue_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            88,
+            93
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Rogue_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            88,
+            93
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Rogue_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            88,
+            93
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Rogue_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            88,
+            93
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Rogue_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            88,
+            93
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Rogue_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        88,
+        93
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Rogue/Rogue_static.png",
+      "static_small": "frames/Rogue/Rogue_static_small.png"
+    },
+    "Skeleton": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            102,
+            81
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Skeleton_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            102,
+            81
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Skeleton_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            102,
+            81
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Skeleton_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            102,
+            81
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Skeleton_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            102,
+            81
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Skeleton_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            102,
+            81
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Skeleton_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        102,
+        81
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Skeleton/Skeleton_static.png",
+      "static_small": "frames/Skeleton/Skeleton_static_small.png"
+    },
+    "Slime": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            93,
+            62
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Slime_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            93,
+            62
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Slime_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            93,
+            62
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Slime_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            93,
+            62
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": true,
+          "strip": "sheets/Slime_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            93,
+            62
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Slime_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            93,
+            62
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Slime_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        93,
+        62
+      ],
+      "facing": "symmetric",
+      "mirrored_from_source": false,
+      "static": "frames/Slime/Slime_static.png",
+      "static_small": "frames/Slime/Slime_static_small.png"
+    },
+    "Spider": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            110,
+            60
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Spider_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            110,
+            60
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Spider_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            110,
+            60
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Spider_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            110,
+            60
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Spider_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            110,
+            60
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Spider_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            110,
+            60
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Spider_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        110,
+        60
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Spider/Spider_static.png",
+      "static_small": "frames/Spider/Spider_static_small.png"
+    },
+    "Villager": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            86,
+            90
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Villager_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            86,
+            90
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Villager_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            86,
+            90
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Villager_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            86,
+            90
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Villager_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            86,
+            90
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Villager_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            86,
+            90
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Villager_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        86,
+        90
+      ],
+      "facing": "right",
+      "mirrored_from_source": false,
+      "static": "frames/Villager/Villager_static.png",
+      "static_small": "frames/Villager/Villager_static_small.png"
+    },
+    "Wraith": {
+      "animations": {
+        "Attack": {
+          "frame_size": [
+            104,
+            96
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Wraith_Attack_strip.png"
+        },
+        "Death": {
+          "frame_size": [
+            104,
+            96
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Wraith_Death_strip.png"
+        },
+        "Hurt": {
+          "frame_size": [
+            104,
+            96
+          ],
+          "frames": 4,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Wraith_Hurt_strip.png"
+        },
+        "Idle": {
+          "frame_size": [
+            104,
+            96
+          ],
+          "frames": 4,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Wraith_Idle_strip.png"
+        },
+        "Jump": {
+          "frame_size": [
+            104,
+            96
+          ],
+          "frames": 6,
+          "loop": false,
+          "pingpong": false,
+          "strip": "sheets/Wraith_Jump_strip.png"
+        },
+        "Walk": {
+          "frame_size": [
+            104,
+            96
+          ],
+          "frames": 6,
+          "loop": true,
+          "pingpong": false,
+          "strip": "sheets/Wraith_Walk_strip.png"
+        }
+      },
+      "canvas": [
+        104,
+        96
+      ],
+      "facing": "right",
+      "mirrored_from_source": true,
+      "static": "frames/Wraith/Wraith_static.png",
+      "static_small": "frames/Wraith/Wraith_static_small.png"
+    }
+  },
+  "terrain": {
+    "band_rows": [
+      9,
+      28
+    ],
+    "derived": [
+      {
+        "file": "terrain/ground_top_96x32_derived.png",
+        "rows": 32,
+        "self_wrap_mismatch_rows": 18
+      },
+      {
+        "file": "terrain/ground_fill_96x32_derived.png",
+        "rows": 32,
+        "self_wrap_mismatch_rows": 21
+      }
+    ],
+    "derived_note": "Rearranged strip pixels, not new art. top = grass surface aligned to y=0; fill = the pure-dirt 8-row unit repeated 4 times (for vertical tiling). Both tiles end on the unit's last row, so fill placed under top adds no new seam.",
+    "keying": {
+      "alpha": "binary (0/255)",
+      "kept_px": 1508,
+      "method": "global near-white threshold RGB>235",
+      "removed_px": 1564
+    },
+    "slices_32": [
+      {
+        "file": "terrain/ground_slice_0_32x32.png",
+        "index": 0,
+        "rows": 32,
+        "self_wrap_mismatch_rows": 14
+      },
+      {
+        "file": "terrain/ground_slice_1_32x32.png",
+        "index": 1,
+        "rows": 32,
+        "self_wrap_mismatch_rows": 10
+      },
+      {
+        "file": "terrain/ground_slice_2_32x32.png",
+        "index": 2,
+        "rows": 32,
+        "self_wrap_mismatch_rows": 12
+      }
+    ],
+    "source": "out/T1_GroundStrip_side.png",
+    "strip": {
+      "file": "terrain/ground_strip_96x32.png",
+      "note": "The horizontal repeat unit is this whole 96 px strip. Strip and 32 px slices are top-aligned (grass at y=0, like the derived top tile), so they sit flush on a 32 px grid.",
+      "rows": 32,
+      "size": [
+        96,
+        32
+      ],
+      "wrap_mismatch_rows": 10
+    },
+    "vertical_unit": {
+      "height": 4,
+      "internal_cost": 14.0,
+      "note": "When wrap_cost is close to internal_cost, the vertical repeat line is not visible.",
+      "rows": [
+        21,
+        24
+      ],
+      "wrap_cost": 16.75
+    }
+  },
+  "view": "side",
+  "license_note": "License: Commercial and personal use permitted. You may modify the assets and use them in any number of projects, including commercial games and apps. You may not resell or redistribute the assets, in original or modified form, as standalone assets or as part of another asset pack. The assets, in original or modified form, may not be used for training AI models. AI disclosure: All sprites and tiles were generated with PixelLab's generative AI tools and processed through an automated pipeline (normalization, background removal, slicing, atlas packing); two left-facing characters were mirrored, and in three Mage Attack frames the staff's crystal end was moved by script from behind the mage to the front. There are no hand-drawn pixels. PixelLab has approved resale of these assets."
+}

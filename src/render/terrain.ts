@@ -110,6 +110,7 @@ function ensureStoneTexture(scene: Phaser.Scene): void {
 export function createTerrainTexture(
   scene: Phaser.Scene,
   level: Level,
+  layer?: Phaser.GameObjects.Layer,
 ): void {
   ensureStoneTexture(scene);
 
@@ -128,6 +129,7 @@ export function createTerrainTexture(
       .setOrigin(0, 0)
       .setScale(scale)
       .setDepth(0);
+    layer?.add(texture);
 
     for (let row = 0; row < level.rows; row += 1) {
       for (let localCol = 0; localCol < cols; localCol += 1) {

@@ -84,34 +84,38 @@ export function createBackdrop(
   viewWidth: number,
   viewHeight: number,
   groundY: number,
+  layer?: Phaser.GameObjects.Layer,
 ): Backdrop {
-  const layers: ParallaxLayer[] = LAYERS.map((layer) => {
+  const layers: ParallaxLayer[] = LAYERS.map((layerConfig) => {
     const tileScaleX = viewWidth / DESERT_BG_WIDTH;
     const tileScaleY = viewHeight / DESERT_BG_HEIGHT;
 
     const sprite = scene.add
-      .tileSprite(0, 0, viewWidth, viewHeight, layer.texture)
+      .tileSprite(0, 0, viewWidth, viewHeight, layerConfig.texture)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(layer.depth)
-      .setTint(layer.tint)
-      .setAlpha(layer.alpha);
+      .setDepth(layerConfig.depth)
+      .setTint(layerConfig.tint)
+      .setAlpha(layerConfig.alpha);
 
     sprite.tileScaleX = tileScaleX;
     sprite.tileScaleY = tileScaleY;
+    layer?.add(sprite);
 
-    return { sprite, factor: layer.factor, tileScale: tileScaleX };
+    return { sprite, factor: layerConfig.factor, tileScale: tileScaleX };
   });
 
   // Palms sit behind the gameplay layer and frame the ruined causeway.
   PALM_POSITIONS.forEach((x, index) => {
-    const texture = index % 2 === 0 ? DESERT_TEXTURES.palm1 : DESERT_TEXTURES.palm2;
-    scene.add
+    const texture =
+      index % 2 === 0 ? DESERT_TEXTURES.palm1 : DESERT_TEXTURES.palm2;
+    const palm = scene.add
       .image(x, groundY, texture)
       .setOrigin(0.5, 1)
       .setScale(index % 3 === 0 ? 0.9 : 0.7)
       .setTint(0x7d91b4)
       .setDepth(-2);
+    layer?.add(palm);
   });
 
   return {

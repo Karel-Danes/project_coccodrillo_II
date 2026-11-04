@@ -40,7 +40,10 @@ export class TouchControls {
   > = [];
   private readonly cleanups: Array<() => void> = [];
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly layer?: Phaser.GameObjects.Layer,
+  ) {}
 
   create(): void {
     // Mouse pointer + three touch pointers: two thumbs and jump.
@@ -101,6 +104,8 @@ export class TouchControls {
       .setDepth(9);
 
     this.objects.push(circle, text);
+    this.layer?.add(circle);
+    this.layer?.add(text);
 
     const pointers = new Set<number>();
 

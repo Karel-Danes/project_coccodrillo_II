@@ -116,6 +116,13 @@ export class GameScene extends Phaser.Scene {
   private touchControls: TouchControls | null = null;
   private backdrop!: Backdrop;
 
+  private hudLayer!: Phaser.GameObjects.Layer;
+  private hudCamera!: Phaser.Cameras.Scene2D.Camera;
+  private readonly zoomLevels = [1, 1.2, 1.4, 1.6, 1.8] as const;
+  private zoomIndex = 0;
+  private baseZoom = 1;
+  private zoomLabel: Phaser.GameObjects.Text | null = null;
+
   private enemyViews: EnemyView[] = [];
   private enemyHud!: Phaser.GameObjects.Graphics;
   private bossHud!: Phaser.GameObjects.Graphics;
@@ -162,6 +169,11 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  private addHud<T extends Phaser.GameObjects.GameObject>(object: T): T {
+    this.hudLayer.add(object);
+    return object;
+  }
+
   preload(): void {
     loadKnightAssets(this);
     loadEnemyAssets(this);
@@ -180,6 +192,29 @@ export class GameScene extends Phaser.Scene {
     const viewWidth = this.scale.width;
     const viewHeight = this.scale.height;
     const groundY = level.spawn.y + PLAYER_HEIGHT;
+
+    this.hudLayer = this.add.layer();
+
+    const forceTouch = new URLSearchParams(window.location.search).has('touch');
+    const showTouchControls =
+      forceTouch || this.sys.game.device.input.touch;
+
+    if (showTouchControls) {
+      try {
+        const saved = Number(
+          window.localStorage.getItem('coccodrillo.zoom'),
+        );
+        const index = this.zoomLevels.findIndex(
+          (zoom) => Math.abs(zoom - saved) < 0.001,
+        );
+        if (index >= 0) {
+          this.zoomIndex = index;
+        }
+      } catch {
+        // localStorage can be unavailable; keep the default zoom.
+      }
+    }
+    this.baseZoom = this.zoomLevels[this.zoomIndex] ?? 1;
 
     this.cameras.main.setBackgroundColor('#0b0d10');
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
@@ -299,115 +334,135 @@ export class GameScene extends Phaser.Scene {
     this.heartHud = [];
     for (let i = 0; i < PLAYER_MAX_HP; i += 1) {
       this.heartHud.push(
-        this.add
-          .image(34 + i * 50, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
-          .setScrollFactor(0)
-          .setDepth(22)
-          .setScale(1),
+        this.addHud(
+          this.add
+            .image(34 + i * 50, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
+            .setScrollFactor(0)
+            .setDepth(22)
+            .setScale(1),
+        ),
       );
     }
 
-    this.add
-      .sprite(34, 204, COIN_KEYS[0] ?? 'pickup-coin-0')
-      .setScrollFactor(0)
-      .setDepth(22)
-      .setScale(0.9)
-      .play('coin-spin');
-    this.coinText = this.add
-      .text(58, 190, 'x 0', {
-        fontFamily: 'monospace',
-        fontSize: '22px',
-        color: '#f0d68a',
-      })
-      .setScrollFactor(0)
-      .setDepth(22);
+    this.addHud(
+      this.add
+        .sprite(34, 204, COIN_KEYS[0] ?? 'pickup-coin-0')
+        .setScrollFactor(0)
+        .setDepth(22)
+        .setScale(0.9)
+        .play('coin-spin'),
+    );
+    this.coinText = this.addHud(
+      this.add
+        .text(58, 190, 'x 0', {
+          fontFamily: 'monospace',
+          fontSize: '22px',
+          color: '#f0d68a',
+        })
+        .setScrollFactor(0)
+        .setDepth(22),
+    );
 
-    this.guardBadge = this.add
-      .image(34, 250, 'guard-artifact')
-      .setScrollFactor(0)
-      .setDepth(22)
-      .setScale(0.5)
-      .setAlpha(0.2);
-    this.guardLabel = this.add
-      .text(58, 238, 'GUARD', {
-        fontFamily: 'monospace',
-        fontSize: '15px',
-        color: '#d8b46a',
-      })
-      .setScrollFactor(0)
-      .setDepth(22)
-      .setAlpha(0.25);
+    this.guardBadge = this.addHud(
+      this.add
+        .image(34, 250, 'guard-artifact')
+        .setScrollFactor(0)
+        .setDepth(22)
+        .setScale(0.5)
+        .setAlpha(0.2),
+    );
+    this.guardLabel = this.addHud(
+      this.add
+        .text(58, 238, 'GUARD', {
+          fontFamily: 'monospace',
+          fontSize: '15px',
+          color: '#d8b46a',
+        })
+        .setScrollFactor(0)
+        .setDepth(22)
+        .setAlpha(0.25),
+    );
 
     this.cameraFocus = this.add.zone(0, 0, 1, 1);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
+    this.cameras.main.setZoom(this.baseZoom);
     this.centerCameraOnPlayer();
 
-    this.keyboardHint = this.add
-      .text(
-        16,
-        viewHeight - 34,
-        '← → / A D  walk    SPACE  jump    X  sword    C  guard    R  restart',
-        {
+    this.keyboardHint = this.addHud(
+      this.add
+        .text(
+          16,
+          viewHeight - 34,
+          '← → / A D  walk    SPACE  jump    X  sword    C  guard    R  restart',
+          {
+            fontFamily: 'monospace',
+            fontSize: '16px',
+            color: '#8b98a5',
+            backgroundColor: 'rgba(11, 13, 16, 0.78)',
+            padding: { x: 8, y: 6 },
+          },
+        )
+        .setScrollFactor(0)
+        .setDepth(20),
+    );
+
+    this.debugText = this.addHud(
+      this.add
+        .text(16, 14, '', {
           fontFamily: 'monospace',
-          fontSize: '16px',
-          color: '#8b98a5',
+          fontSize: '15px',
+          color: '#aab6c2',
           backgroundColor: 'rgba(11, 13, 16, 0.78)',
           padding: { x: 8, y: 6 },
-        },
-      )
-      .setScrollFactor(0)
-      .setDepth(20);
+          lineSpacing: 4,
+        })
+        .setScrollFactor(0)
+        .setDepth(20),
+    );
 
-    this.debugText = this.add
-      .text(16, 14, '', {
-        fontFamily: 'monospace',
-        fontSize: '15px',
-        color: '#aab6c2',
-        backgroundColor: 'rgba(11, 13, 16, 0.78)',
-        padding: { x: 8, y: 6 },
-        lineSpacing: 4,
-      })
-      .setScrollFactor(0)
-      .setDepth(20);
+    this.bossName = this.addHud(
+      this.add
+        .text(viewWidth / 2, 28, 'THE MIGHTY JAN ZÁTKA', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '22px',
+          color: '#f3dfa2',
+          stroke: '#1a1208',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0)
+        .setDepth(21)
+        .setVisible(false),
+    );
 
-    this.bossName = this.add
-      .text(viewWidth / 2, 28, 'THE MIGHTY JAN ZÁTKA', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '22px',
-        color: '#f3dfa2',
-        stroke: '#1a1208',
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(21)
-      .setVisible(false);
+    this.bossHud = this.addHud(
+      this.add.graphics().setScrollFactor(0).setDepth(21),
+    );
 
-    this.bossHud = this.add
-      .graphics()
-      .setScrollFactor(0)
-      .setDepth(21);
+    this.deathShade = this.addHud(
+      this.add
+        .rectangle(0, 0, viewWidth, viewHeight, 0x000000, 0.58)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(25)
+        .setVisible(false)
+        .setInteractive(),
+    );
 
-    this.deathShade = this.add
-      .rectangle(0, 0, viewWidth, viewHeight, 0x000000, 0.58)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(25)
-      .setVisible(false)
-      .setInteractive();
-
-    this.deathText = this.add
-      .text(viewWidth / 2, viewHeight / 2, '', {
-        fontFamily: 'monospace',
-        fontSize: '32px',
-        color: '#e8dcc0',
-        align: 'center',
-        lineSpacing: 14,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(26)
-      .setVisible(false);
+    this.deathText = this.addHud(
+      this.add
+        .text(viewWidth / 2, viewHeight / 2, '', {
+          fontFamily: 'monospace',
+          fontSize: '32px',
+          color: '#e8dcc0',
+          align: 'center',
+          lineSpacing: 14,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(26)
+        .setVisible(false),
+    );
 
     this.deathShade.on('pointerdown', () => {
       const state = this.simulation.state;
@@ -443,14 +498,24 @@ export class GameScene extends Phaser.Scene {
     keyboard.on('keydown', this.unlockAudio, this);
     this.input.on('pointerdown', this.unlockAudio, this);
 
-    const forceTouch = new URLSearchParams(window.location.search).has('touch');
-    const showTouchControls = forceTouch || this.sys.game.device.input.touch;
-
     if (showTouchControls) {
       this.keyboardHint.setVisible(false);
-      this.touchControls = new TouchControls(this);
+      this.touchControls = new TouchControls(this, this.hudLayer);
       this.touchControls.create();
+      this.createZoomControls(viewWidth);
     }
+
+    this.hudCamera = this.cameras.add(0, 0, viewWidth, viewHeight);
+    this.hudCamera.setScroll(0, 0);
+    this.hudCamera.setZoom(1);
+    this.cameras.main.ignore(this.hudLayer);
+    this.hudCamera.ignore(
+      this.children.list.filter(
+        (child) =>
+          child !==
+          (this.hudLayer as unknown as Phaser.GameObjects.GameObject),
+      ),
+    );
 
     this.bus.on('playerDied', this.onPlayerDied, this);
     this.bus.on('playerHurt', this.onPlayerHurt, this);
@@ -557,18 +622,20 @@ export class GameScene extends Phaser.Scene {
 
   private showBanner(message: string): void {
     this.bannerText?.destroy();
-    const text = this.add
-      .text(this.scale.width / 2, this.scale.height * 0.3, message, {
-        fontFamily: 'Georgia, serif',
-        fontSize: '27px',
-        color: '#f3dfa2',
-        stroke: '#1a1208',
-        strokeThickness: 5,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(24)
-      .setAlpha(0);
+    const text = this.addHud(
+      this.add
+        .text(this.scale.width / 2, this.scale.height * 0.3, message, {
+          fontFamily: 'Georgia, serif',
+          fontSize: '27px',
+          color: '#f3dfa2',
+          stroke: '#1a1208',
+          strokeThickness: 5,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(24)
+        .setAlpha(0),
+    );
     this.bannerText = text;
 
     this.tweens.add({
@@ -634,6 +701,8 @@ export class GameScene extends Phaser.Scene {
     const generation = this.cutsceneGeneration;
     this.cutsceneGolemIndex = golemIndex;
 
+    this.hudCamera.setVisible(false);
+    this.hudLayer.setVisible(false);
     this.debugText.setVisible(false);
     this.keyboardHint.setVisible(false);
     this.touchControls?.setVisible(false);
@@ -645,7 +714,11 @@ export class GameScene extends Phaser.Scene {
     const golemY = golem.position.y + stats.height / 2;
 
     this.cameraFocus.setPosition(golemX, golemY);
-    this.cameras.main.zoomTo(1.7, 900, 'Sine.easeInOut');
+    this.cameras.main.zoomTo(
+      Math.max(1.7, this.baseZoom),
+      900,
+      'Sine.easeInOut',
+    );
 
     this.cutsceneShade.setVisible(true).setAlpha(0);
     this.tweens.add({
@@ -704,6 +777,7 @@ export class GameScene extends Phaser.Scene {
     generation: number,
   ): void {
     const container = this.add.container(x, golemTopY - 50).setDepth(30);
+    this.hudCamera.ignore(container);
     const background = this.add.graphics();
 
     background.fillStyle(0xffefd0, 0.97);
@@ -795,7 +869,9 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
-    this.cameras.main.zoomTo(1, 700, 'Sine.easeInOut');
+    this.cameras.main.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
+    this.hudCamera.setVisible(true);
+    this.hudLayer.setVisible(true);
     this.debugText.setVisible(true);
     this.keyboardHint.setVisible(this.touchControls === null);
     this.touchControls?.setVisible(true);
@@ -858,7 +934,9 @@ export class GameScene extends Phaser.Scene {
     this.playerSprite.setAlpha(1);
 
     this.cameras.main.zoomEffect.reset();
-    this.cameras.main.setZoom(1);
+    this.cameras.main.setZoom(this.baseZoom);
+    this.hudCamera.setVisible(true);
+    this.hudLayer.setVisible(true);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
     this.centerCameraOnPlayer();
     this.render();
@@ -871,6 +949,86 @@ export class GameScene extends Phaser.Scene {
       player.position.y + PLAYER_HEIGHT / 2,
     );
     this.cameras.main.centerOn(this.cameraFocus.x, this.cameraFocus.y);
+  }
+
+  private createZoomControls(viewWidth: number): void {
+    const y = 48;
+    const minusX = viewWidth - 160;
+    const plusX = viewWidth - 40;
+    const labelX = viewWidth - 100;
+
+    const create = (x: number, label: string, delta: number): void => {
+      const circle = this.addHud(
+        this.add
+          .circle(x, y, 24, 0x10161d, 0.55)
+          .setStrokeStyle(2, 0x6a7785, 0.9)
+          .setScrollFactor(0)
+          .setDepth(23)
+          .setInteractive(),
+      );
+      this.addHud(
+        this.add
+          .text(x, y, label, {
+            fontFamily: 'monospace',
+            fontSize: '26px',
+            color: '#d7dde3',
+          })
+          .setOrigin(0.5)
+          .setScrollFactor(0)
+          .setDepth(24),
+      );
+      circle.on('pointerdown', () => this.changeZoom(delta));
+    };
+
+    create(minusX, '−', -1);
+    create(plusX, '+', 1);
+
+    this.zoomLabel = this.addHud(
+      this.add
+        .text(labelX, 82, '', {
+          fontFamily: 'monospace',
+          fontSize: '16px',
+          color: '#8b98a5',
+          backgroundColor: 'rgba(11, 13, 16, 0.78)',
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(24),
+    );
+    this.updateZoomLabel();
+  }
+
+  private changeZoom(delta: number): void {
+    if (this.cutsceneActive) {
+      return;
+    }
+
+    const next = Math.max(
+      0,
+      Math.min(this.zoomLevels.length - 1, this.zoomIndex + delta),
+    );
+    if (next === this.zoomIndex) {
+      return;
+    }
+
+    this.zoomIndex = next;
+    this.baseZoom = this.zoomLevels[next] ?? 1;
+    this.cameras.main.zoomTo(this.baseZoom, 180, 'Sine.easeOut');
+    this.updateZoomLabel();
+
+    try {
+      window.localStorage.setItem(
+        'coccodrillo.zoom',
+        String(this.baseZoom),
+      );
+    } catch {
+      // Persistence is optional.
+    }
+  }
+
+  private updateZoomLabel(): void {
+    this.zoomLabel?.setText(`${Math.round(this.baseZoom * 100)}%`);
   }
 
   private render(): void {
@@ -976,6 +1134,7 @@ export class GameScene extends Phaser.Scene {
           .setDepth(12)
           .setBlendMode(Phaser.BlendModes.ADD)
           .setScale(0.1);
+        this.hudCamera.ignore(view);
         this.projectileViews.push(view);
       }
 

@@ -25,9 +25,16 @@ export type DeathReason = 'spikes' | 'fall' | 'sword';
 
 export type TileType = 'empty' | 'solid' | 'spike';
 
-export type EnemyKind = 'skeleton';
+export type EnemyKind =
+  | 'skeleton'
+  | 'goblin'
+  | 'slime'
+  | 'bat'
+  | 'golem';
 
 export type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'die';
+
+export type GameMode = 'play' | 'cutscene' | 'victory';
 
 export type EnemySpawn = {
   kind: EnemyKind;
@@ -50,7 +57,10 @@ export type Enemy = {
   grounded: boolean;
   patrolMinX: number;
   patrolMaxX: number;
-  /** Seconds until the skeleton may swing again. */
+  /** Spawn anchor, used by flying enemies to hover. */
+  homeX: number;
+  homeY: number;
+  /** Seconds until the enemy may swing again. */
   attackCooldown: number;
 };
 
@@ -89,6 +99,7 @@ export type GameStatus = 'playing' | 'dead';
 export type GameState = {
   player: Player;
   status: GameStatus;
+  mode: GameMode;
   deathReason: DeathReason | null;
   enemies: readonly Enemy[];
 };

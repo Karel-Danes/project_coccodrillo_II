@@ -38,8 +38,8 @@ function settleOn(level: Level, spawn: Vec2): Player {
 }
 
 describe('world 01', () => {
-  it('is a 60 x 18 tile world with a valid spawn', () => {
-    expect(LEVEL_01.cols).toBe(60);
+  it('is a 96 x 18 tile world with a valid spawn and roster', () => {
+    expect(LEVEL_01.cols).toBe(96);
     expect(LEVEL_01.rows).toBe(18);
     expect(LEVEL_01.tileSize).toBe(TILE_SIZE);
 
@@ -49,17 +49,21 @@ describe('world 01', () => {
     const pitTile = LEVEL_01.tiles[17 * LEVEL_01.cols + 10] ?? 'empty';
     expect(pitTile).toBe('spike');
 
-    const enemy = LEVEL_01.enemies[0];
-    expect(enemy).toBeDefined();
-    if (!enemy) {
-      throw new Error('World 01 should contain a skeleton');
+    expect(LEVEL_01.enemies.map((enemy) => enemy.kind)).toEqual([
+      'skeleton',
+      'bat',
+      'slime',
+      'goblin',
+      'golem',
+    ]);
+
+    for (const enemy of LEVEL_01.enemies) {
+      const groundTile =
+        LEVEL_01.tiles[
+          16 * LEVEL_01.cols + Math.floor(enemy.x / TILE_SIZE)
+        ] ?? 'empty';
+      expect(groundTile).toBe('solid');
     }
-    expect(enemy.kind).toBe('skeleton');
-    const enemyTile =
-      LEVEL_01.tiles[
-        16 * LEVEL_01.cols + Math.floor(enemy.x / TILE_SIZE)
-      ] ?? 'empty';
-    expect(enemyTile).toBe('solid');
   });
 
   it('lets the player mount the first block with a running jump', () => {

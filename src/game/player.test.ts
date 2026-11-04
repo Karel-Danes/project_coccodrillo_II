@@ -231,14 +231,30 @@ describe('sword and guard', () => {
     expect(hitbox!.x).toBeCloseTo(player.position.x - ATTACK_REACH);
   });
 
-  it('does not allow attacks in mid-air', () => {
+  it('allows a committed air attack without changing jump direction', () => {
     const level = flatLevel();
-    const jumping = step(settle(level), level, IDLE, true);
+    const walking = step(settle(level), level, RIGHT);
+    const jumping = step(walking, level, RIGHT, true);
     expect(jumping.state).toBe('jump');
 
-    const attempting = step(jumping, level, NO_INPUT, false, true);
-    expect(attempting.state).toBe('jump');
-    expect(getAttackPhase(attempting)).toBeNull();
+    const attacking = step(jumping, level, NO_INPUT, false, true);
+    expect(attacking.state).toBe('attack');
+    expect(getAttackPhase(attacking)).toBe('startup');
+    expect(attacking.velocity.x).toBeCloseTo(WALK_SPEED);
+
+    const airborne = step(attacking, level, { ...NO_INPUT, left: true });
+    expect(airborne.state).toBe('attack');
+    expect(airborne.facing).toBe(1);
+    expect(airborne.velocity.x).toBeCloseTo(WALK_SPEED);
+    expect(airborne.position.x).toBeGreaterThan(attacking.position.x);
+
+    let player = airborne;
+    for (let i = 0; i < 40 && player.state === 'attack'; i += 1) {
+      player = step(player, level, { ...NO_INPUT, left: true });
+    }
+
+    expect(player.state).toBe('fall');
+    expect(player.velocity.x).toBeCloseTo(WALK_SPEED);
   });
 
   it('holds guard without moving and blocks damage', () => {

@@ -1,12 +1,12 @@
 import { EventEmitter } from 'eventemitter3';
-import type { DeathReason, Player } from '../game/types';
+import type { DeathReason, EnemyKind, Player } from '../game/types';
 
 /**
  * Events crossing the logic <-> render boundary.
  *
- * Gameplay events (`leverPulled`, ...) are added here as the corresponding
- * systems land. Keeping the map typed means adding an event is a
- * compile-time decision rather than a stringly-typed surprise.
+ * Gameplay events are added here as their systems land. Keeping the map
+ * typed means adding an event is a compile-time decision rather than a
+ * stringly-typed surprise.
  */
 export type GameEvents = {
   /** Emitted once, after the render scene has finished creating. */
@@ -15,6 +15,16 @@ export type GameEvents = {
   playerMoved: (player: Player) => void;
   /** Emitted once per run, on the step the player dies. */
   playerDied: (reason: DeathReason) => void;
+  /** The player's sword connected with an enemy. */
+  enemyHit: (kind: EnemyKind) => void;
+  /** An enemy's HP reached zero. */
+  enemyDied: (kind: EnemyKind) => void;
+  /** A guard absorbed an enemy swing. */
+  attackBlocked: () => void;
+  /** The golem has seen the player; run the intro cutscene. */
+  bossIntro: (kind: 'golem') => void;
+  /** The golem has been defeated. */
+  bossDefeated: () => void;
 };
 
 export class GameEventBus extends EventEmitter<GameEvents> {}

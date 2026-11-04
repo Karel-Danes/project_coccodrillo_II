@@ -17,6 +17,21 @@ export function publishEvents(
       case 'playerDied':
         bus.emit('playerDied', event.reason);
         break;
+      case 'enemyHit':
+        bus.emit('enemyHit', event.kind);
+        break;
+      case 'enemyDied':
+        bus.emit('enemyDied', event.kind);
+        break;
+      case 'attackBlocked':
+        bus.emit('attackBlocked');
+        break;
+      case 'bossIntro':
+        bus.emit('bossIntro', event.kind);
+        break;
+      case 'bossDefeated':
+        bus.emit('bossDefeated');
+        break;
     }
   }
 }

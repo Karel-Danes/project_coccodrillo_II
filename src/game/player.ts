@@ -95,15 +95,23 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
 
   if (player.state === 'attack') {
     stateTime = player.stateTime + dtSeconds;
-    vx = 0;
+    // A grounded swing plants the feet; an air swing keeps jump momentum.
+    vx = player.grounded ? 0 : player.velocity.x;
 
     if (stateTime >= ATTACK_DURATION) {
-      if (direction !== 0) {
-        facing = direction;
+      if (player.grounded) {
+        if (direction !== 0) {
+          facing = direction;
+        }
+        state = groundStateFor(input);
+        stateTime = 0;
+        vx = groundVelocityFor(state, input);
+      } else {
+        // Finish the air swing without ever redirecting the jump.
+        state = player.velocity.y < 0 ? 'jump' : 'fall';
+        stateTime = 0;
+        vx = player.velocity.x;
       }
-      state = groundStateFor(input);
-      stateTime = 0;
-      vx = groundVelocityFor(state, input);
     }
   } else if (player.state === 'guard') {
     if (direction !== 0) {
@@ -148,8 +156,15 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     }
   } else {
     // Airborne: horizontal velocity stays committed from takeoff.
-    state = player.state === 'jump' ? 'jump' : 'fall';
-    stateTime = 0;
+    if (context.attackPressed) {
+      // Air attacks are allowed and keep the jump's horizontal momentum.
+      state = 'attack';
+      stateTime = 0;
+      vx = player.velocity.x;
+    } else {
+      state = player.state === 'jump' ? 'jump' : 'fall';
+      stateTime = 0;
+    }
   }
 
   vy = Math.min(vy + GRAVITY * dtSeconds, MAX_FALL_SPEED);
@@ -169,8 +184,13 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   let finalTime = stateTime;
 
   if (!kinematics.grounded) {
-    finalState = kinematics.velocity.y < 0 ? 'jump' : 'fall';
-    finalTime = 0;
+    if (state === 'attack') {
+      finalState = 'attack';
+      finalTime = stateTime;
+    } else {
+      finalState = kinematics.velocity.y < 0 ? 'jump' : 'fall';
+      finalTime = 0;
+    }
   } else if (state === 'attack' || state === 'guard') {
     finalState = state;
     finalTime = stateTime;

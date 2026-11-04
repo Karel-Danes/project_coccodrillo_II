@@ -18,6 +18,12 @@ export const JUMP_SPEED = 640;
 export const GRAVITY = 2000;
 export const MAX_FALL_SPEED = 1400;
 
+export const PLAYER_MAX_HP = 3;
+export const PLAYER_HURT_DURATION = 0.35;
+export const PLAYER_INVULNERABILITY = 1.1;
+const HURT_KNOCKBACK_X = 200;
+const HURT_KNOCKBACK_Y = -230;
+
 /** Committed sword swing timings, in seconds. */
 export const ATTACK_STARTUP = 0.12;
 export const ATTACK_ACTIVE = 0.12;
@@ -49,6 +55,61 @@ export function createPlayer(spawn: Vec2): Player {
     facing: 1,
     grounded: false,
     stateTime: 0,
+    hp: PLAYER_MAX_HP,
+    maxHp: PLAYER_MAX_HP,
+    invulnerableTime: 0,
+  };
+}
+
+/**
+ * Applies combat damage. A non-fatal hit staggers the Knight away from the
+ * source and grants i-frames; a fatal hit enters the death state.
+ */
+export function applyPlayerDamage(
+  player: Player,
+  amount: number,
+  sourceX: number,
+): Player {
+  if (player.state === 'die' || player.invulnerableTime > 0) {
+    return player;
+  }
+
+  const hp = Math.max(0, player.hp - amount);
+  if (hp === 0) {
+    return {
+      ...player,
+      hp,
+      state: 'die',
+      velocity: { x: 0, y: 0 },
+      invulnerableTime: PLAYER_INVULNERABILITY,
+    };
+  }
+
+  const away = player.position.x + PLAYER_WIDTH / 2 < sourceX ? -1 : 1;
+
+  return {
+    ...player,
+    hp,
+    state: 'hurt',
+    stateTime: 0,
+    facing: away === -1 ? 1 : -1,
+    velocity: {
+      x: away * HURT_KNOCKBACK_X,
+      y: HURT_KNOCKBACK_Y,
+    },
+    grounded: false,
+    invulnerableTime: PLAYER_INVULNERABILITY,
+  };
+}
+
+/** Restores health up to the maximum. */
+export function healPlayer(player: Player, amount: number): Player {
+  if (player.state === 'die') {
+    return player;
+  }
+  return {
+    ...player,
+    hp: Math.min(player.maxHp, player.hp + amount),
   };
 }
 
@@ -86,6 +147,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
 
   const { input, level, dtSeconds } = context;
   const direction = horizontalIntent(input);
+  const invulnerableTime = Math.max(0, player.invulnerableTime - dtSeconds);
 
   let state: PlayerState = player.state;
   let stateTime = 0;
@@ -93,7 +155,22 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   let vx = player.velocity.x;
   let vy = player.velocity.y;
 
-  if (player.state === 'attack') {
+  if (player.state === 'hurt') {
+    stateTime = player.stateTime + dtSeconds;
+    vx = player.velocity.x;
+    vy = player.velocity.y;
+
+    if (stateTime >= PLAYER_HURT_DURATION) {
+      if (player.grounded) {
+        state = groundStateFor(input);
+        stateTime = 0;
+        vx = groundVelocityFor(state, input);
+      } else {
+        state = player.velocity.y < 0 ? 'jump' : 'fall';
+        stateTime = 0;
+      }
+    }
+  } else if (player.state === 'attack') {
     stateTime = player.stateTime + dtSeconds;
     // A grounded swing plants the feet; an air swing keeps jump momentum.
     vx = player.grounded ? 0 : player.velocity.x;
@@ -184,14 +261,14 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   let finalTime = stateTime;
 
   if (!kinematics.grounded) {
-    if (state === 'attack') {
-      finalState = 'attack';
+    if (state === 'attack' || state === 'hurt') {
+      finalState = state;
       finalTime = stateTime;
     } else {
       finalState = kinematics.velocity.y < 0 ? 'jump' : 'fall';
       finalTime = 0;
     }
-  } else if (state === 'attack' || state === 'guard') {
+  } else if (state === 'attack' || state === 'guard' || state === 'hurt') {
     finalState = state;
     finalTime = stateTime;
   } else if (state === 'walk' || state === 'idle') {
@@ -213,6 +290,9 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     facing,
     grounded: kinematics.grounded,
     stateTime: finalTime,
+    hp: player.hp,
+    maxHp: player.maxHp,
+    invulnerableTime,
   };
 }
 

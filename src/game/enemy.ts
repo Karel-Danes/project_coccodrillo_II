@@ -34,6 +34,8 @@ export type EnemyStats = {
   attackReach: number;
   attackHeight: number;
   attackOffsetY: number;
+  /** Health lost by the player when this enemy's swing connects. */
+  damage: number;
 };
 
 export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
@@ -53,6 +55,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     attackReach: 64,
     attackHeight: 52,
     attackOffsetY: 18,
+    damage: 1,
   },
   goblin: {
     behavior: 'ground',
@@ -70,6 +73,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     attackReach: 64,
     attackHeight: 48,
     attackOffsetY: 16,
+    damage: 1,
   },
   slime: {
     behavior: 'ground',
@@ -87,6 +91,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     attackReach: 46,
     attackHeight: 32,
     attackOffsetY: 4,
+    damage: 1,
   },
   bat: {
     behavior: 'flying',
@@ -104,6 +109,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     attackReach: 50,
     attackHeight: 32,
     attackOffsetY: 0,
+    damage: 1,
   },
   golem: {
     behavior: 'ground',
@@ -121,6 +127,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     attackReach: 100,
     attackHeight: 80,
     attackOffsetY: 28,
+    damage: 2,
   },
 };
 

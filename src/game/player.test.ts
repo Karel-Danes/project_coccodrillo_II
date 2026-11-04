@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { parseLevel } from './level';
 import {
+  applyPlayerDamage,
   ATTACK_REACH,
   blocksDamage,
   createPlayer,
   getAttackHitbox,
   getAttackPhase,
   GRAVITY,
+  healPlayer,
+  PLAYER_INVULNERABILITY,
+  PLAYER_MAX_HP,
   PLAYER_WIDTH,
   stepPlayer,
   WALK_SPEED,
@@ -158,6 +162,49 @@ describe('player state machine', () => {
     const wallX = 9 * level.tileSize;
     expect(player.position.x + PLAYER_WIDTH).toBeCloseTo(wallX);
     expect(player.grounded).toBe(true);
+  });
+});
+
+describe('health', () => {
+  it('loses a heart, staggers away, and gains i-frames', () => {
+    const level = flatLevel();
+    const standing = settle(level);
+    const sourceX = standing.position.x + 100;
+
+    const hurt = applyPlayerDamage(standing, 1, sourceX);
+    expect(hurt.hp).toBe(PLAYER_MAX_HP - 1);
+    expect(hurt.state).toBe('hurt');
+    expect(hurt.invulnerableTime).toBeCloseTo(PLAYER_INVULNERABILITY);
+    expect(hurt.velocity.x).toBeLessThan(0);
+
+    const ignored = applyPlayerDamage(hurt, 1, sourceX);
+    expect(ignored).toBe(hurt);
+    expect(ignored.hp).toBe(hurt.hp);
+
+    let player = hurt;
+    for (let i = 0; i < 40 && player.state === 'hurt'; i += 1) {
+      player = step(player, level, NO_INPUT);
+    }
+
+    expect(player.state).not.toBe('hurt');
+    expect(player.invulnerableTime).toBeLessThan(PLAYER_INVULNERABILITY);
+  });
+
+  it('heals up to the cap and dies when the last heart is lost', () => {
+    const level = flatLevel();
+    const standing = settle(level);
+
+    const wounded = { ...standing, hp: 1, invulnerableTime: 0 };
+    expect(healPlayer(wounded, 1).hp).toBe(2);
+    expect(healPlayer(wounded, 99).hp).toBe(PLAYER_MAX_HP);
+
+    const dead = applyPlayerDamage(
+      { ...standing, hp: 1, invulnerableTime: 0 },
+      1,
+      standing.position.x + 100,
+    );
+    expect(dead.hp).toBe(0);
+    expect(dead.state).toBe('die');
   });
 });
 

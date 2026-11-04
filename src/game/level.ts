@@ -1,4 +1,11 @@
-import type { AABB, EnemySpawn, Level, TileType, Vec2 } from './types';
+import type {
+  AABB,
+  EnemySpawn,
+  Level,
+  PickupSpawn,
+  TileType,
+  Vec2,
+} from './types';
 
 /**
  * Tolerance used when a box edge sits exactly on a tile boundary. Without
@@ -23,6 +30,7 @@ export type ParseLevelOptions = {
   tileSize: number;
   spawn: Vec2;
   enemies?: readonly EnemySpawn[];
+  pickups?: readonly PickupSpawn[];
 };
 
 /**
@@ -72,6 +80,7 @@ export function parseLevel(
     tiles,
     spawn: options.spawn,
     enemies: options.enemies ?? [],
+    pickups: options.pickups ?? [],
   };
 }
 

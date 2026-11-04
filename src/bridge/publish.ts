@@ -17,6 +17,9 @@ export function publishEvents(
       case 'playerDied':
         bus.emit('playerDied', event.reason);
         break;
+      case 'playerHurt':
+        bus.emit('playerHurt', event.hp);
+        break;
       case 'enemyHit':
         bus.emit('enemyHit', event.kind);
         break;
@@ -25,6 +28,14 @@ export function publishEvents(
         break;
       case 'attackBlocked':
         bus.emit('attackBlocked');
+        break;
+      case 'pickupCollected':
+        bus.emit(
+          'pickupCollected',
+          event.kind,
+          event.hp,
+          event.coins,
+        );
         break;
       case 'bossIntro':
         bus.emit('bossIntro', event.kind);

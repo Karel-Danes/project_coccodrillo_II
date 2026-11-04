@@ -19,6 +19,7 @@ export type PlayerState =
   | 'fall'
   | 'attack'
   | 'guard'
+  | 'hurt'
   | 'die';
 
 export type DeathReason = 'spikes' | 'fall' | 'sword';
@@ -64,6 +65,22 @@ export type Enemy = {
   attackCooldown: number;
 };
 
+export type PickupKind = 'heart' | 'coin' | 'well';
+
+export type PickupSpawn = {
+  kind: PickupKind;
+  /** Centre of the pickup, in world pixels. */
+  x: number;
+  y: number;
+};
+
+export type Pickup = {
+  kind: PickupKind;
+  /** Centre of the pickup, in world pixels. */
+  position: Vec2;
+  collected: boolean;
+};
+
 export type Level = {
   cols: number;
   rows: number;
@@ -73,6 +90,7 @@ export type Level = {
   /** Player top-left position at spawn, in world pixels. */
   spawn: Vec2;
   enemies: readonly EnemySpawn[];
+  pickups: readonly PickupSpawn[];
 };
 
 export type Player = {
@@ -84,6 +102,10 @@ export type Player = {
   grounded: boolean;
   /** Seconds spent in the current state; drives the attack timing. */
   stateTime: number;
+  hp: number;
+  maxHp: number;
+  /** Seconds of remaining post-hit invulnerability. */
+  invulnerableTime: number;
 };
 
 export type InputState = {
@@ -102,4 +124,6 @@ export type GameState = {
   mode: GameMode;
   deathReason: DeathReason | null;
   enemies: readonly Enemy[];
+  pickups: readonly Pickup[];
+  coins: number;
 };

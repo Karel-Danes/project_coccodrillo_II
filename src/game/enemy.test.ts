@@ -178,6 +178,8 @@ describe('skeleton', () => {
     expect(simulation.state.player.state).toBe('guard');
     expect(simulation.state.deathReason).toBeNull();
 
+    // With one heart left, dropping guard during the next swing is fatal.
+    simulation.state.player.hp = 1;
     simulation.setInput(NO_INPUT);
     for (let i = 0; i < 300 && simulation.state.status === 'playing'; i += 1) {
       simulation.step();

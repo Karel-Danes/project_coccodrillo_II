@@ -57,6 +57,14 @@ describe('world 01', () => {
       'golem',
     ]);
 
+    expect(LEVEL_01.pickups.length).toBeGreaterThan(15);
+    expect(
+      LEVEL_01.pickups.filter((pickup) => pickup.kind === 'well'),
+    ).toHaveLength(4);
+    expect(
+      LEVEL_01.pickups.filter((pickup) => pickup.kind === 'heart').length,
+    ).toBeGreaterThan(2);
+
     for (const enemy of LEVEL_01.enemies) {
       const groundTile =
         LEVEL_01.tiles[

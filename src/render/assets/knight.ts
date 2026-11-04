@@ -1,5 +1,6 @@
 import attackUrl from '../../../graphics/sidescroller_starter_pack/sheets/Knight_Attack_strip.png?url';
 import deathUrl from '../../../graphics/sidescroller_starter_pack/sheets/Knight_Death_strip.png?url';
+import hurtUrl from '../../../graphics/sidescroller_starter_pack/sheets/Knight_Hurt_strip.png?url';
 import idleUrl from '../../../graphics/sidescroller_starter_pack/sheets/Knight_Idle_strip.png?url';
 import jumpUrl from '../../../graphics/sidescroller_starter_pack/sheets/Knight_Jump_strip.png?url';
 import walkUrl from '../../../graphics/sidescroller_starter_pack/sheets/Knight_Walk_strip.png?url';
@@ -25,6 +26,7 @@ export const KNIGHT_TEXTURES = {
   walk: 'knight-walk',
   jump: 'knight-jump',
   attack: 'knight-attack',
+  hurt: 'knight-hurt',
   death: 'knight-death',
 } as const;
 
@@ -33,5 +35,6 @@ export const KNIGHT_STRIPS = {
   walk: walkUrl,
   jump: jumpUrl,
   attack: attackUrl,
+  hurt: hurtUrl,
   death: deathUrl,
 } as const;

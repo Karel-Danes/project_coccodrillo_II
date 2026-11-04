@@ -11,6 +11,7 @@ import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
 import {
   getAttackPhase,
   PLAYER_HEIGHT,
+  PLAYER_MAX_HP,
   PLAYER_WIDTH,
 } from '../../game/player';
 import { Simulation } from '../../game/simulation';
@@ -20,6 +21,8 @@ import type {
   EnemyKind,
   EnemyState,
   Level,
+  Pickup,
+  PickupKind,
   Player,
   PlayerState,
 } from '../../game/types';
@@ -33,12 +36,14 @@ import {
   KNIGHT_FRAME_HEIGHT,
   KNIGHT_SCALE,
 } from '../assets/knight';
+import { COIN_KEYS, HEART_KEYS } from '../assets/pickups';
 import { createBackdrop, loadDesertAssets, type Backdrop } from '../backdrop';
 import {
   loadEnemyAssets,
   registerEnemyAnimations,
 } from '../enemyAnimations';
 import { loadKnightAssets, registerKnightAnimations } from '../knightAnimations';
+import { loadPickupAssets, registerPickupAnimations } from '../pickups';
 import { Sfx } from '../sfx';
 import { createTerrainTexture } from '../terrain';
 import { TouchControls } from '../TouchControls';
@@ -54,6 +59,7 @@ const PLAYER_ANIMATION: Record<PlayerState, string> = {
   fall: 'knight-fall',
   attack: 'knight-attack',
   guard: 'knight-guard',
+  hurt: 'knight-hurt',
   die: 'knight-death',
 };
 
@@ -61,6 +67,13 @@ type EnemyView = {
   sprite: Phaser.GameObjects.Sprite;
   animation: string;
   kind: EnemyKind;
+};
+
+type PickupView = {
+  sprite: Phaser.GameObjects.Sprite;
+  base?: Phaser.GameObjects.Graphics;
+  kind: PickupKind;
+  phase: number;
 };
 
 /**
@@ -106,6 +119,10 @@ export class GameScene extends Phaser.Scene {
   private bossHud!: Phaser.GameObjects.Graphics;
   private bossName!: Phaser.GameObjects.Text;
 
+  private pickupViews: PickupView[] = [];
+  private heartHud: Phaser.GameObjects.Image[] = [];
+  private coinText!: Phaser.GameObjects.Text;
+
   private guardFx!: Phaser.GameObjects.Graphics;
   private attackFx!: Phaser.GameObjects.Graphics;
 
@@ -142,6 +159,7 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     loadKnightAssets(this);
     loadEnemyAssets(this);
+    loadPickupAssets(this);
     loadDesertAssets(this);
   }
 
@@ -177,6 +195,7 @@ export class GameScene extends Phaser.Scene {
 
     registerKnightAnimations(this);
     registerEnemyAnimations(this);
+    registerPickupAnimations(this);
 
     this.playerSprite = this.add
       .sprite(0, 0, 'knight-idle')
@@ -203,6 +222,56 @@ export class GameScene extends Phaser.Scene {
     this.guardFx = this.add.graphics().setDepth(9);
     this.attackFx = this.add.graphics().setDepth(11);
     this.enemyHud = this.add.graphics().setDepth(12);
+
+    this.pickupViews = this.simulation.state.pickups.map((pickup, index) => {
+      const isCoin = pickup.kind === 'coin';
+      const texture = isCoin
+        ? (COIN_KEYS[0] ?? 'pickup-coin-0')
+        : (HEART_KEYS[0] ?? 'pickup-heart-0');
+      const sprite = this.add
+        .sprite(pickup.position.x, pickup.position.y, texture)
+        .setDepth(4)
+        .setScale(isCoin ? 0.8 : 0.95);
+      sprite.play(isCoin ? 'coin-spin' : 'heart-pulse');
+
+      let base: Phaser.GameObjects.Graphics | undefined;
+      if (pickup.kind === 'well') {
+        const x = pickup.position.x;
+        const y = pickup.position.y + 28;
+        base = this.add.graphics().setDepth(2);
+        base.fillStyle(0x161d29, 0.95).fillEllipse(x, y, 86, 28);
+        base.lineStyle(3, 0x6f7f9c, 0.9).strokeEllipse(x, y, 86, 28);
+        base.fillStyle(0x3e6472, 0.7).fillEllipse(x, y - 5, 58, 12);
+      }
+
+      return { sprite, base, kind: pickup.kind, phase: index * 0.7 };
+    });
+
+    this.heartHud = [];
+    for (let i = 0; i < PLAYER_MAX_HP; i += 1) {
+      this.heartHud.push(
+        this.add
+          .image(32 + i * 42, 146, HEART_KEYS[0] ?? 'pickup-heart-0')
+          .setScrollFactor(0)
+          .setDepth(22)
+          .setScale(0.85),
+      );
+    }
+
+    this.add
+      .sprite(32, 190, COIN_KEYS[0] ?? 'pickup-coin-0')
+      .setScrollFactor(0)
+      .setDepth(22)
+      .setScale(0.7)
+      .play('coin-spin');
+    this.coinText = this.add
+      .text(54, 176, 'x 0', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        color: '#f0d68a',
+      })
+      .setScrollFactor(0)
+      .setDepth(22);
 
     this.cameraFocus = this.add.zone(0, 0, 1, 1);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
@@ -319,17 +388,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.bus.on('playerDied', this.onPlayerDied, this);
+    this.bus.on('playerHurt', this.onPlayerHurt, this);
     this.bus.on('enemyHit', this.onEnemyHit, this);
     this.bus.on('enemyDied', this.onEnemyDied, this);
     this.bus.on('attackBlocked', this.onAttackBlocked, this);
+    this.bus.on('pickupCollected', this.onPickupCollected, this);
     this.bus.on('bossIntro', this.startBossCutscene, this);
     this.bus.on('bossDefeated', this.onBossDefeated, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.bus.off('playerDied', this.onPlayerDied, this);
+      this.bus.off('playerHurt', this.onPlayerHurt, this);
       this.bus.off('enemyHit', this.onEnemyHit, this);
       this.bus.off('enemyDied', this.onEnemyDied, this);
       this.bus.off('attackBlocked', this.onAttackBlocked, this);
+      this.bus.off('pickupCollected', this.onPickupCollected, this);
       this.bus.off('bossIntro', this.startBossCutscene, this);
       this.bus.off('bossDefeated', this.onBossDefeated, this);
       keyboard.off('keydown', this.unlockAudio, this);
@@ -393,6 +466,19 @@ export class GameScene extends Phaser.Scene {
 
   private onEnemyHit(): void {
     this.sfx.hit();
+  }
+
+  private onPlayerHurt(): void {
+    this.sfx.playerHurt();
+    this.cameras.main.shake(120, 0.003);
+  }
+
+  private onPickupCollected(kind: PickupKind): void {
+    if (kind === 'coin') {
+      this.sfx.coin();
+    } else {
+      this.sfx.heal();
+    }
   }
 
   private onEnemyDied(kind: EnemyKind): void {
@@ -639,6 +725,12 @@ export class GameScene extends Phaser.Scene {
       view.sprite.setVisible(true).setDepth(9).clearTint().setScale(art.scale);
     }
 
+    for (const view of this.pickupViews) {
+      view.sprite.setVisible(true).setAlpha(1);
+      view.base?.setAlpha(1);
+    }
+    this.playerSprite.setAlpha(1);
+
     this.cameras.main.zoomEffect.reset();
     this.cameras.main.setZoom(1);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
@@ -656,10 +748,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private render(): void {
-    const { player, enemies, mode } = this.simulation.state;
+    const { player, enemies, pickups, mode } = this.simulation.state;
 
     this.renderPlayer(player);
     this.renderEnemies(enemies);
+    this.renderPickups(pickups);
+    this.renderHud();
     this.renderCombatFx(player, enemies);
     this.renderBossBar(player, enemies);
     this.updateSfx(player, enemies);
@@ -678,7 +772,7 @@ export class GameScene extends Phaser.Scene {
     this.debugText.setText([
       'COCCODRILLO-II — WORLD 01',
       `mode ${mode} · ${player.state} · grounded ${player.grounded ? 'yes' : 'no'}`,
-      `pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
+      `hp ${player.hp}/${player.maxHp} · pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
       `enemies ${alive}/${enemies.length} alive${golem ? ` · golem ${golem.hp}/${statsFor('golem').maxHp}` : ''}`,
       `cam ${this.cameras.main.scrollX.toFixed(0)}, ${this.cameras.main.scrollY.toFixed(0)} · tick ${this.tick}`,
     ]);
@@ -691,11 +785,56 @@ export class GameScene extends Phaser.Scene {
     );
     this.playerSprite.setFlipX(player.facing === -1);
 
+    const blinking =
+      player.state !== 'die' &&
+      player.invulnerableTime > 0 &&
+      Math.floor(this.time.now / 90) % 2 === 0;
+    this.playerSprite.setAlpha(blinking ? 0.35 : 1);
+
     const animation = PLAYER_ANIMATION[player.state];
     if (animation !== this.currentAnimation) {
       this.playerSprite.play(animation, true);
       this.currentAnimation = animation;
     }
+  }
+
+  private renderPickups(pickups: readonly Pickup[]): void {
+    pickups.forEach((pickup, index) => {
+      const view = this.pickupViews[index];
+      if (!view) {
+        return;
+      }
+
+      if (pickup.collected) {
+        view.sprite.setVisible(false);
+        view.base?.setAlpha(0.25);
+        return;
+      }
+
+      view.sprite.setVisible(true);
+      view.sprite.setPosition(
+        pickup.position.x,
+        pickup.position.y +
+          Math.sin(this.time.now / 420 + view.phase) * 4,
+      );
+      view.base?.setAlpha(1);
+    });
+  }
+
+  private renderHud(): void {
+    const { player, coins } = this.simulation.state;
+
+    this.heartHud.forEach((heart, index) => {
+      const full = index < player.hp;
+      heart.setAlpha(full ? 1 : 0.22);
+      if (full) {
+        heart.clearTint();
+      } else {
+        heart.setTint(0x2a2a2a);
+      }
+    });
+
+    this.coinText.setText(`x ${coins}`);
   }
 
   private renderEnemies(enemies: readonly Enemy[]): void {

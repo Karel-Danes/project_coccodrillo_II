@@ -28,6 +28,13 @@ export function loadKnightAssets(scene: Phaser.Scene): void {
       FRAME_CONFIG,
     );
   }
+  if (!scene.textures.exists(KNIGHT_TEXTURES.hurt)) {
+    scene.load.spritesheet(
+      KNIGHT_TEXTURES.hurt,
+      KNIGHT_STRIPS.hurt,
+      FRAME_CONFIG,
+    );
+  }
   if (!scene.textures.exists(KNIGHT_TEXTURES.death)) {
     scene.load.spritesheet(KNIGHT_TEXTURES.death, KNIGHT_STRIPS.death, FRAME_CONFIG);
   }
@@ -91,6 +98,15 @@ export function registerKnightAnimations(scene: Phaser.Scene): void {
       }),
       frameRate: 1,
       repeat: -1,
+    },
+    {
+      key: 'knight-hurt',
+      frames: scene.anims.generateFrameNumbers(KNIGHT_TEXTURES.hurt, {
+        start: 0,
+        end: 3,
+      }),
+      frameRate: 10,
+      repeat: 0,
     },
     {
       key: 'knight-death',

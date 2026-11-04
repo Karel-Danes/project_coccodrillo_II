@@ -151,6 +151,22 @@ export class Sfx {
     this.tone(780, 900, 0.2, 'sine', 0.04);
   }
 
+  heal(): void {
+    this.tone(520, 880, 0.28, 'sine', 0.08);
+    this.tone(780, 1170, 0.3, 'triangle', 0.05);
+    this.noise(0.12, 0.03, 2600);
+  }
+
+  coin(): void {
+    this.tone(1046, 1318, 0.08, 'square', 0.05);
+    this.tone(1568, 1568, 0.1, 'sine', 0.04, 0.05);
+  }
+
+  playerHurt(): void {
+    this.tone(160, 70, 0.25, 'sawtooth', 0.12);
+    this.noise(0.1, 0.1, 320);
+  }
+
   enemySwing(kind: EnemyKind): void {
     const base =
       kind === 'golem'

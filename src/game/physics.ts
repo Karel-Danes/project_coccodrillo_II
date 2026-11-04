@@ -73,6 +73,18 @@ function blockingRow(
 }
 
 /**
+ * True when two axis-aligned boxes overlap. Edge-touching is not overlap.
+ */
+export function overlaps(a: AABB, b: AABB): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+/**
  * Moves a body by `velocity * dtSeconds`, resolving solid tiles one axis at
  * a time (horizontal first, then vertical). All speeds stay well below one
  * tile per step, so axis-separated resolution cannot tunnel.

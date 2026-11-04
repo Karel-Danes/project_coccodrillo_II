@@ -48,6 +48,18 @@ describe('world 01', () => {
 
     const pitTile = LEVEL_01.tiles[17 * LEVEL_01.cols + 10] ?? 'empty';
     expect(pitTile).toBe('spike');
+
+    const enemy = LEVEL_01.enemies[0];
+    expect(enemy).toBeDefined();
+    if (!enemy) {
+      throw new Error('World 01 should contain a skeleton');
+    }
+    expect(enemy.kind).toBe('skeleton');
+    const enemyTile =
+      LEVEL_01.tiles[
+        16 * LEVEL_01.cols + Math.floor(enemy.x / TILE_SIZE)
+      ] ?? 'empty';
+    expect(enemyTile).toBe('solid');
   });
 
   it('lets the player mount the first block with a running jump', () => {
@@ -68,6 +80,7 @@ describe('world 01', () => {
     const level: Level = {
       ...LEVEL_01,
       spawn: { x: 600, y: 936 },
+      enemies: [],
     };
     const simulation = new Simulation(level);
     for (let i = 0; i < 10; i += 1) {

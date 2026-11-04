@@ -21,9 +21,38 @@ export type PlayerState =
   | 'guard'
   | 'die';
 
-export type DeathReason = 'spikes' | 'fall';
+export type DeathReason = 'spikes' | 'fall' | 'sword';
 
 export type TileType = 'empty' | 'solid' | 'spike';
+
+export type EnemyKind = 'skeleton';
+
+export type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'die';
+
+export type EnemySpawn = {
+  kind: EnemyKind;
+  /** Enemy top-left at spawn, in world pixels. */
+  x: number;
+  y: number;
+  patrolMinX: number;
+  patrolMaxX: number;
+};
+
+export type Enemy = {
+  kind: EnemyKind;
+  /** Top-left of the collision box. */
+  position: Vec2;
+  velocity: Vec2;
+  facing: Facing;
+  state: EnemyState;
+  stateTime: number;
+  hp: number;
+  grounded: boolean;
+  patrolMinX: number;
+  patrolMaxX: number;
+  /** Seconds until the skeleton may swing again. */
+  attackCooldown: number;
+};
 
 export type Level = {
   cols: number;
@@ -33,6 +62,7 @@ export type Level = {
   tiles: readonly TileType[];
   /** Player top-left position at spawn, in world pixels. */
   spawn: Vec2;
+  enemies: readonly EnemySpawn[];
 };
 
 export type Player = {
@@ -60,4 +90,5 @@ export type GameState = {
   player: Player;
   status: GameStatus;
   deathReason: DeathReason | null;
+  enemies: readonly Enemy[];
 };

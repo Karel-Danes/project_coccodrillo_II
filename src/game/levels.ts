@@ -38,4 +38,14 @@ export const LEVEL_01: Level = parseLevel(WORLD_01_ASCII, {
   tileSize: TILE_SIZE,
   // Standing on the ground in the third column.
   spawn: { x: 140, y: 936 },
+  enemies: [
+    {
+      kind: 'skeleton',
+      // The flat ground between the first block and the first spike pit.
+      x: 520,
+      y: 936,
+      patrolMinX: 460,
+      patrolMaxX: 590,
+    },
+  ],
 });

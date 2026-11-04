@@ -6,16 +6,28 @@ import { LEVEL_01 } from '../../game/levels';
 import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
 import { PLAYER_HEIGHT, PLAYER_WIDTH } from '../../game/player';
 import { Simulation } from '../../game/simulation';
-import type { DeathReason, Level, Player } from '../../game/types';
+import type { DeathReason, Level, Player, PlayerState } from '../../game/types';
+import {
+  KNIGHT_FEET_Y,
+  KNIGHT_FRAME_HEIGHT,
+  KNIGHT_SCALE,
+} from '../assets/knight';
+import { loadKnightAssets, registerKnightAnimations } from '../knightAnimations';
+import { TouchControls } from '../TouchControls';
 
 const COLORS = {
   solid: 0x222b36,
   solidTop: 0x3d4d60,
   spike: 0x9aa4ae,
-  player: 0xd7c8a8,
-  playerDead: 0x7a3a3a,
-  playerEye: 0x2a2018,
 } as const;
+
+const PLAYER_ANIMATION: Record<PlayerState, string> = {
+  idle: 'knight-idle',
+  walk: 'knight-walk',
+  jump: 'knight-jump',
+  fall: 'knight-fall',
+  die: 'knight-death',
+};
 
 /**
  * Render layer only: draws the simulation state, feeds it input, and turns
@@ -26,9 +38,12 @@ export class GameScene extends Phaser.Scene {
   private simulation = new Simulation(LEVEL_01);
   private tick = 0;
 
-  private playerBody!: Phaser.GameObjects.Rectangle;
-  private playerEye!: Phaser.GameObjects.Rectangle;
+  private playerSprite!: Phaser.GameObjects.Sprite;
+  private currentAnimation = '';
+  private touchControls: TouchControls | null = null;
+
   private debugText!: Phaser.GameObjects.Text;
+  private keyboardHint!: Phaser.GameObjects.Text;
   private deathShade!: Phaser.GameObjects.Rectangle;
   private deathText!: Phaser.GameObjects.Text;
 
@@ -41,6 +56,10 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  preload(): void {
+    loadKnightAssets(this);
+  }
+
   create(): void {
     const level = this.simulation.level;
     const width = level.cols * level.tileSize;
@@ -48,19 +67,15 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#0b0d10');
     this.drawLevel(level);
+    registerKnightAnimations(this);
 
-    this.playerBody = this.add
-      .rectangle(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, COLORS.player)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, 0x6b5c44)
+    this.playerSprite = this.add
+      .sprite(0, 0, 'knight-idle')
+      .setOrigin(0.5, KNIGHT_FEET_Y / KNIGHT_FRAME_HEIGHT)
+      .setScale(KNIGHT_SCALE)
       .setDepth(10);
 
-    this.playerEye = this.add
-      .rectangle(0, 0, 7, 7, COLORS.playerEye)
-      .setOrigin(0, 0)
-      .setDepth(11);
-
-    this.add
+    this.keyboardHint = this.add
       .text(16, height - 34, '← → / A D  walk    SPACE  jump    R  restart', {
         fontFamily: 'monospace',
         fontSize: '16px',
@@ -81,7 +96,8 @@ export class GameScene extends Phaser.Scene {
       .rectangle(0, 0, width, height, 0x000000, 0.55)
       .setOrigin(0, 0)
       .setDepth(25)
-      .setVisible(false);
+      .setVisible(false)
+      .setInteractive();
 
     this.deathText = this.add
       .text(width / 2, height / 2, '', {
@@ -95,6 +111,12 @@ export class GameScene extends Phaser.Scene {
       .setDepth(26)
       .setVisible(false);
 
+    this.deathShade.on('pointerdown', () => {
+      if (this.simulation.state.status === 'dead') {
+        this.restart();
+      }
+    });
+
     const keyboard = this.input.keyboard;
     if (keyboard === null) {
       throw new Error('Keyboard input is not available in this environment');
@@ -104,9 +126,21 @@ export class GameScene extends Phaser.Scene {
     this.keyD = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyR = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
 
+    const forceTouch = new URLSearchParams(window.location.search).has('touch');
+    const showTouchControls =
+      forceTouch || this.sys.game.device.input.touch;
+
+    if (showTouchControls) {
+      this.keyboardHint.setVisible(false);
+      this.touchControls = new TouchControls(this);
+      this.touchControls.create();
+    }
+
     this.bus.on('playerDied', this.onPlayerDied, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.bus.off('playerDied', this.onPlayerDied, this);
+      this.touchControls?.destroy();
+      this.touchControls = null;
     });
 
     this.bus.emit('sceneReady');
@@ -118,10 +152,17 @@ export class GameScene extends Phaser.Scene {
       this.restart();
     }
 
+    const touch = this.touchControls?.input;
+
     this.simulation.setInput({
-      left: this.cursors.left.isDown || this.keyA.isDown,
-      right: this.cursors.right.isDown || this.keyD.isDown,
-      jumpHeld: this.cursors.space.isDown || this.cursors.up.isDown,
+      left:
+        this.cursors.left.isDown || this.keyA.isDown || touch?.left === true,
+      right:
+        this.cursors.right.isDown || this.keyD.isDown || touch?.right === true,
+      jumpHeld:
+        this.cursors.space.isDown ||
+        this.cursors.up.isDown ||
+        touch?.jumpHeld === true,
     });
 
     this.loop.advance(delta, () => {
@@ -136,24 +177,21 @@ export class GameScene extends Phaser.Scene {
   private onPlayerDied(reason: DeathReason): void {
     this.deathText.setText(
       reason === 'spikes'
-        ? 'IMPALED\nPRESS R TO RETRY'
-        : 'LOST TO THE VOID\nPRESS R TO RETRY',
+        ? 'IMPALED\nTAP OR PRESS R TO RETRY'
+        : 'LOST TO THE VOID\nTAP OR PRESS R TO RETRY',
     );
     this.deathShade.setVisible(true);
     this.deathText.setVisible(true);
-    this.playerBody.setFillStyle(COLORS.playerDead);
-    this.playerEye.setVisible(false);
   }
 
   private restart(): void {
     this.simulation = new Simulation(LEVEL_01);
     this.loop.reset();
     this.tick = 0;
+    this.currentAnimation = '';
 
     this.deathShade.setVisible(false);
     this.deathText.setVisible(false);
-    this.playerBody.setFillStyle(COLORS.player);
-    this.playerEye.setVisible(true);
 
     this.render();
   }
@@ -171,13 +209,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderPlayer(player: Player): void {
-    this.playerBody.setPosition(player.position.x, player.position.y);
+    this.playerSprite.setPosition(
+      player.position.x + PLAYER_WIDTH / 2,
+      player.position.y + PLAYER_HEIGHT,
+    );
+    this.playerSprite.setFlipX(player.facing === -1);
 
-    const eyeX =
-      player.facing === 1
-        ? player.position.x + PLAYER_WIDTH - 14
-        : player.position.x + 7;
-    this.playerEye.setPosition(eyeX, player.position.y + 14);
+    const animation = PLAYER_ANIMATION[player.state];
+    if (animation !== this.currentAnimation) {
+      this.playerSprite.play(animation, true);
+      this.currentAnimation = animation;
+    }
   }
 
   private drawLevel(level: Level): void {

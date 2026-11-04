@@ -28,6 +28,6 @@ const LEVEL_01_ASCII = [
 
 export const LEVEL_01: Level = parseLevel(LEVEL_01_ASCII, {
   tileSize: TILE_SIZE,
-  // Standing on the floor in the second column, horizontally centred.
-  spawn: { x: 76, y: 616 },
+  // Standing on the floor in the second column, clear of the left wall.
+  spawn: { x: 92, y: 616 },
 });

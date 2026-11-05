@@ -1,6 +1,8 @@
 import { EventEmitter } from 'eventemitter3';
 import type {
+  DamageSource,
   DeathReason,
+  EnemyHitAttack,
   EnemyKind,
   PickupKind,
   Player,
@@ -23,11 +25,23 @@ export type GameEvents = {
   /** Emitted once per run, on the step the player dies. */
   playerDied: (reason: DeathReason) => void;
   /** A combat hit cost the player health but was not fatal. */
-  playerHurt: (hp: number) => void;
-  /** The player's melee swing connected with an enemy. */
-  enemyHit: (kind: EnemyKind) => void;
+  playerHurt: (
+    hp: number,
+    damage: number,
+    source: DamageSource,
+  ) => void;
+  /** The player's melee/ranged attack connected with an enemy. */
+  enemyHit: (
+    kind: EnemyKind,
+    damage: number,
+    attack: EnemyHitAttack,
+  ) => void;
   /** An enemy's HP reached zero. */
-  enemyDied: (kind: EnemyKind) => void;
+  enemyDied: (
+    kind: EnemyKind,
+    damage: number,
+    attack: EnemyHitAttack,
+  ) => void;
   /** A guard absorbed an enemy swing or spell. */
   attackBlocked: () => void;
   /** A coin, heart, well, or sky sigil was consumed. */
@@ -47,6 +61,8 @@ export type GameEvents = {
   bossDefeated: (kind: EnemyKind) => void;
   /** A ranged hero launched lightning or an axe. */
   playerRanged: (kind: ProjectileKind) => void;
+  /** The Mage released a charged lightning ball. */
+  playerPowerShot: (damage: number, charge: number) => void;
   /** A Mage's ward bounced an enemy spell back. */
   spellBounced: () => void;
   /** The Orc's berserk mode started. */

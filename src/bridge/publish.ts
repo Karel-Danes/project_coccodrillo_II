@@ -18,13 +18,28 @@ export function publishEvents(
         bus.emit('playerDied', event.reason);
         break;
       case 'playerHurt':
-        bus.emit('playerHurt', event.hp);
+        bus.emit(
+          'playerHurt',
+          event.hp,
+          event.damage,
+          event.source,
+        );
         break;
       case 'enemyHit':
-        bus.emit('enemyHit', event.kind);
+        bus.emit(
+          'enemyHit',
+          event.kind,
+          event.damage,
+          event.attack,
+        );
         break;
       case 'enemyDied':
-        bus.emit('enemyDied', event.kind);
+        bus.emit(
+          'enemyDied',
+          event.kind,
+          event.damage,
+          event.attack,
+        );
         break;
       case 'attackBlocked':
         bus.emit('attackBlocked');
@@ -52,6 +67,13 @@ export function publishEvents(
         break;
       case 'playerRanged':
         bus.emit('playerRanged', event.kind);
+        break;
+      case 'playerPowerShot':
+        bus.emit(
+          'playerPowerShot',
+          event.damage,
+          event.charge,
+        );
         break;
       case 'spellBounced':
         bus.emit('spellBounced');

@@ -230,8 +230,16 @@ export type Player = {
   /** Orc berserk remaining time, in seconds. */
   berserkTime: number;
   berserkCooldown: number;
+  /** Once the relic is found, the Orc's rage never ends. */
+  berserkPermanent: boolean;
   /** True for the one step on which berserk was activated. */
   berserkStarted: boolean;
+  /** Mage's charged power orb, in seconds. */
+  powerCharge: number;
+  /** True for the one step on which the charged orb is released. */
+  powerShot: boolean;
+  /** Charge held on the release step. */
+  powerShotCharge: number;
 };
 
 export type ProjectileKind =
@@ -239,10 +247,15 @@ export type ProjectileKind =
   | 'darkOrb'
   | 'enemyBolt'
   | 'lightning'
+  | 'chargedLightning'
   | 'axe'
   | 'reflected';
 
 export type ProjectileOwner = 'player' | 'enemy';
+
+export type DamageSource = EnemyKind | ProjectileKind;
+
+export type EnemyHitAttack = 'melee' | 'ranged' | 'charged';
 
 export type Projectile = {
   position: Vec2;
@@ -254,6 +267,8 @@ export type Projectile = {
   damage: number;
   /** Downward acceleration, used by thrown axes. */
   gravity: number;
+  /** 0-1 charge for the Mage's power orb. */
+  charge?: number;
 };
 
 export type InputState = {
@@ -264,6 +279,8 @@ export type InputState = {
   guardHeld: boolean;
   /** Optional so existing keyboard-only tests stay concise. */
   rangedHeld?: boolean;
+  /** Mage's held power charge. */
+  powerHeld?: boolean;
 };
 
 export type GameStatus = 'playing' | 'dead';
@@ -291,4 +308,6 @@ export type GameConfig = {
   worldMode: WorldMode;
   difficulty: Difficulty;
   seed?: number;
+  /** Play the menu-to-map fly-in when the scene first opens. */
+  flyIn?: boolean;
 };

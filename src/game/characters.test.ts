@@ -106,6 +106,30 @@ describe('character rulebook', () => {
     expect(hitbox!.height).toBeGreaterThan(hitbox!.width);
   });
 
+  it('charges a stronger Mage power orb while POWER is held', () => {
+    const simulation = new Simulation(flatLevel(), { character: 'mage' });
+    for (let i = 0; i < 10; i += 1) {
+      simulation.step();
+    }
+
+    simulation.state.player.guardUnlocked = true;
+    simulation.setInput({ ...NO_INPUT, powerHeld: true });
+    for (let i = 0; i < 60; i += 1) {
+      simulation.step();
+    }
+    expect(simulation.state.player.powerCharge).toBeGreaterThan(0.5);
+
+    simulation.setInput(NO_INPUT);
+    simulation.step();
+
+    const shot = simulation.state.projectiles.find(
+      (projectile) => projectile.kind === 'chargedLightning',
+    );
+    expect(shot).toBeDefined();
+    expect(shot?.damage).toBeGreaterThan(3);
+    expect(shot?.charge).toBeGreaterThan(0.5);
+  });
+
   it('does not let the Orc throw axes outside berserk', () => {
     const simulation = new Simulation(flatLevel(), {
       character: 'orcBrute',
@@ -153,6 +177,15 @@ describe('character rulebook', () => {
     expect(simulation.state.player.maxHp).toBe(9);
     expect(simulation.state.player.hp).toBe(9);
     expect(simulation.state.player.guardUnlocked).toBe(true);
+    expect(simulation.state.player.berserkPermanent).toBe(true);
+
+    simulation.setInput({ ...NO_INPUT, rangedHeld: true });
+    simulation.step();
+    expect(
+      simulation.state.projectiles.some(
+        (projectile) => projectile.kind === 'axe',
+      ),
+    ).toBe(true);
   });
 
   it('ends in victory when a marked random boss falls', () => {

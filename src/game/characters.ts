@@ -73,7 +73,7 @@ export const CHARACTERS: Record<CharacterKind, CharacterDefinition> = {
     rangedName: 'Berserk Axe Throw',
     basicAbility: 'Axe',
     extraAbility: 'Berserk Mode',
-    extraDetail: 'Berserk: axe throws +3 life.',
+    extraDetail: 'Permanent rage: axe throws +3 life.',
     extraLabel: 'RAGE',
     accent: 0xff9b6a,
   },

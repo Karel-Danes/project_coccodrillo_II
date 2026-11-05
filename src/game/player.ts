@@ -42,6 +42,9 @@ export const RANGED_COOLDOWN = 0.46;
 export const BERSERK_DURATION = 6;
 export const BERSERK_COOLDOWN = 10;
 export const BERSERK_SPEED_MULTIPLIER = 1.25;
+export const MAX_POWER_CHARGE = 2;
+export const MIN_POWER_CHARGE = 0.12;
+export const POWER_MOVE_MULTIPLIER = 0.55;
 
 export type PlayerStepContext = {
   level: Level;
@@ -85,7 +88,11 @@ export function createPlayer(
     jumpBonus: 0,
     berserkTime: 0,
     berserkCooldown: 0,
+    berserkPermanent: false,
     berserkStarted: false,
+    powerCharge: 0,
+    powerShot: false,
+    powerShotCharge: 0,
   };
 }
 
@@ -110,6 +117,9 @@ export function applyPlayerDamage(
       state: 'die',
       velocity: { x: 0, y: 0 },
       invulnerableTime: PLAYER_INVULNERABILITY,
+      powerCharge: 0,
+      powerShot: false,
+      powerShotCharge: 0,
     };
   }
 
@@ -127,6 +137,9 @@ export function applyPlayerDamage(
     },
     grounded: false,
     invulnerableTime: PLAYER_INVULNERABILITY,
+    powerCharge: 0,
+    powerShot: false,
+    powerShotCharge: 0,
   };
 }
 
@@ -152,7 +165,10 @@ export function grantExtraLife(player: Player, amount = 3): Player {
 }
 
 export function isBerserk(player: Player): boolean {
-  return player.character === 'orcBrute' && player.berserkTime > 0;
+  return (
+    player.character === 'orcBrute' &&
+    (player.berserkPermanent || player.berserkTime > 0)
+  );
 }
 
 export function getMeleeDamage(player: Player): number {
@@ -241,16 +257,43 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   // The Orc's axe throw exists only while the rage is burning.
   const canRanged =
     definition.rangedDamage > 0 &&
-    (!definition.rangedRequiresBerserk || berserkTime > 0);
+    (!definition.rangedRequiresBerserk || isBerserk(player));
+  const canPower =
+    player.character === 'mage' && player.guardUnlocked;
+  const powerHeld = canPower && input.powerHeld === true;
+  const charging = powerHeld;
+
+  let powerCharge = canPower ? player.powerCharge : 0;
+  let powerShot = false;
+  let powerShotCharge = 0;
+  if (player.state !== 'hurt') {
+    if (powerHeld) {
+      powerCharge = Math.min(
+        MAX_POWER_CHARGE,
+        powerCharge + dtSeconds,
+      );
+    } else if (powerCharge > 0) {
+      if (powerCharge >= MIN_POWER_CHARGE) {
+        powerShot = true;
+        powerShotCharge = powerCharge;
+      }
+      powerCharge = 0;
+    }
+  } else {
+    powerCharge = 0;
+  }
 
   const speed =
-    WALK_SPEED * (berserkTime > 0 ? BERSERK_SPEED_MULTIPLIER : 1);
+    WALK_SPEED *
+    (isBerserk(player) ? BERSERK_SPEED_MULTIPLIER : 1) *
+    (charging ? POWER_MOVE_MULTIPLIER : 1);
   const wantsRanged =
+    !charging &&
     canRanged &&
     rangedCooldown <= 0 &&
     ((context.rangedPressed === true) ||
       (context.attackPressed && !canMelee));
-  const wantsMelee = canMelee && context.attackPressed;
+  const wantsMelee = !charging && canMelee && context.attackPressed;
 
   let state: PlayerState = player.state;
   let stateTime = 0;
@@ -425,7 +468,11 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     jumpBonus: player.jumpBonus,
     berserkTime,
     berserkCooldown,
+    berserkPermanent: player.berserkPermanent,
     berserkStarted,
+    powerCharge,
+    powerShot,
+    powerShotCharge,
   };
 }
 

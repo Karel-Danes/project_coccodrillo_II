@@ -39,6 +39,7 @@ import {
   grantExtraLife,
   hasFallenOutOfWorld,
   healPlayer,
+  MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
   stepPlayer,
@@ -47,9 +48,11 @@ import {
 import type {
   AABB,
   CharacterKind,
+  DamageSource,
   DeathReason,
   Difficulty,
   Enemy,
+  EnemyHitAttack,
   EnemyKind,
   FloatingIsland,
   FloatingIslandSpawn,
@@ -72,9 +75,19 @@ import type {
 export type GameEvent =
   | { type: 'playerMoved'; player: Player }
   | { type: 'playerDied'; reason: DeathReason }
-  | { type: 'playerHurt'; hp: number }
-  | { type: 'enemyHit'; kind: EnemyKind }
-  | { type: 'enemyDied'; kind: EnemyKind }
+  | { type: 'playerHurt'; hp: number; damage: number; source: DamageSource }
+  | {
+      type: 'enemyHit';
+      kind: EnemyKind;
+      damage: number;
+      attack: EnemyHitAttack;
+    }
+  | {
+      type: 'enemyDied';
+      kind: EnemyKind;
+      damage: number;
+      attack: EnemyHitAttack;
+    }
   | { type: 'attackBlocked' }
   | {
       type: 'pickupCollected';
@@ -87,6 +100,7 @@ export type GameEvent =
   | { type: 'bossShot' }
   | { type: 'bossDefeated'; kind: EnemyKind }
   | { type: 'playerRanged'; kind: ProjectileKind }
+  | { type: 'playerPowerShot'; damage: number; charge: number }
   | { type: 'enemyShot' }
   | { type: 'spellBounced' }
   | { type: 'berserkStarted' }
@@ -453,6 +467,9 @@ export class Simulation {
         grounded: true,
         state: 'idle',
         stateTime: 0,
+        powerCharge: 0,
+        powerShot: false,
+        powerShotCharge: 0,
       },
       used: true,
     };
@@ -480,6 +497,30 @@ export class Simulation {
         continue;
       }
       const distance = Math.hypot(dx, dy);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x, y };
+      }
+    }
+
+    return best;
+  }
+
+  private nearestEnemyTarget(from: Vec2): Vec2 | undefined {
+    let best: Vec2 | undefined;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const enemy of this.enemies) {
+      if (enemy.state === 'die') {
+        continue;
+      }
+      const stats = statsFor(enemy.kind);
+      const x = enemy.position.x + stats.width / 2;
+      const y = enemy.position.y + stats.height / 2;
+      const distance = Math.hypot(x - from.x, y - from.y);
+      if (distance > 900 || Math.abs(y - from.y) > 420) {
+        continue;
+      }
       if (distance < bestDistance) {
         bestDistance = distance;
         best = { x, y };
@@ -582,7 +623,14 @@ export class Simulation {
 
       if (pickup.kind === 'artifact') {
         pickup.collected = true;
-        player = { ...player, guardUnlocked: true };
+        player = {
+          ...player,
+          guardUnlocked: true,
+          berserkPermanent:
+            player.character === 'orcBrute'
+              ? true
+              : player.berserkPermanent,
+        };
         if (player.character === 'orcBrute') {
           player = grantExtraLife(player, 3);
         }
@@ -657,8 +705,18 @@ export class Simulation {
           const damaged = damageEnemy(enemy, damage);
           events.push(
             damaged.state === 'die'
-              ? { type: 'enemyDied', kind: enemy.kind }
-              : { type: 'enemyHit', kind: enemy.kind },
+              ? {
+                  type: 'enemyDied',
+                  kind: enemy.kind,
+                  damage,
+                  attack: 'melee',
+                }
+              : {
+                  type: 'enemyHit',
+                  kind: enemy.kind,
+                  damage,
+                  attack: 'melee',
+                },
           );
           return damaged;
         });
@@ -684,6 +742,36 @@ export class Simulation {
         ),
       );
       events.push({ type: 'playerRanged', kind });
+    }
+
+    if (player.powerShot) {
+      const centre = playerCentre(player);
+      const ratio = Math.min(
+        1,
+        player.powerShotCharge / MAX_POWER_CHARGE,
+      );
+      const target = this.nearestEnemyTarget(centre);
+      const damage = Math.max(
+        3,
+        Math.round(getRangedDamage(player) * (1 + ratio * 4)),
+      );
+      const shot = createPlayerProjectile(
+        'lightning',
+        { x: centre.x + player.facing * 18, y: centre.y },
+        player.facing,
+        damage,
+        target,
+      );
+      shot.kind = 'chargedLightning';
+      shot.charge = ratio;
+      shot.velocity.x *= 0.85;
+      shot.velocity.y *= 0.85;
+      this.projectiles.push(shot);
+      events.push({
+        type: 'playerPowerShot',
+        damage,
+        charge: ratio,
+      });
     }
 
     if (player.berserkStarted) {
@@ -828,10 +916,22 @@ export class Simulation {
 
         const damaged = damageEnemy(hit, moved.damage);
         this.enemies[hitIndex] = damaged;
+        const attack: EnemyHitAttack =
+          moved.kind === 'chargedLightning' ? 'charged' : 'ranged';
         events.push(
           damaged.state === 'die'
-            ? { type: 'enemyDied', kind: hit.kind }
-            : { type: 'enemyHit', kind: hit.kind },
+            ? {
+                type: 'enemyDied',
+                kind: hit.kind,
+                damage: moved.damage,
+                attack,
+              }
+            : {
+                type: 'enemyHit',
+                kind: hit.kind,
+                damage: moved.damage,
+                attack,
+              },
         );
         continue;
       }
@@ -875,7 +975,12 @@ export class Simulation {
           this.status = 'dead';
           this.deathReason = 'sword';
         } else if (player.hp < hpBefore) {
-          events.push({ type: 'playerHurt', hp: player.hp });
+          events.push({
+            type: 'playerHurt',
+            hp: player.hp,
+            damage: moved.damage,
+            source: moved.kind,
+          });
         }
       }
     }
@@ -926,7 +1031,12 @@ export class Simulation {
               this.status = 'dead';
               this.deathReason = 'sword';
             } else if (player.hp < hpBefore) {
-              events.push({ type: 'playerHurt', hp: player.hp });
+              events.push({
+                type: 'playerHurt',
+                hp: player.hp,
+                damage,
+                source: enemy.kind,
+              });
             }
           }
           break;

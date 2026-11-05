@@ -521,12 +521,66 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
     this.starting = true;
-    this.cameras.main.fadeOut(240, 0, 0, 0);
-    this.time.delayedCall(240, () => {
+
+    const card = this.cards.find(
+      (item) => item.kind === this.selectedCharacter,
+    );
+    const preview = card?.preview;
+    const accent = CHARACTERS[this.selectedCharacter].accent;
+    const exitX = this.scale.width * 0.16;
+    const exitY = this.scale.height + 200;
+
+    if (preview) {
+      const baseScale = preview.scaleX;
+      preview.setDepth(12);
+      const trail = this.add
+        .circle(preview.x, preview.y - 30, 42, accent, 0.28)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(11);
+
+      this.tweens.add({
+        targets: trail,
+        x: exitX,
+        y: exitY - 30,
+        scale: 0.18,
+        alpha: 0,
+        duration: 980,
+        ease: 'Cubic.easeIn',
+        onComplete: () => trail.destroy(),
+      });
+
+      this.tweens.add({
+        targets: preview,
+        x: this.scale.width * 0.5,
+        y: 290,
+        scaleX: baseScale * 1.18,
+        scaleY: baseScale * 1.18,
+        duration: 260,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: preview,
+            x: exitX,
+            y: exitY,
+            scaleX: baseScale * 0.52,
+            scaleY: baseScale * 0.52,
+            angle: -24,
+            duration: 660,
+            ease: 'Cubic.easeIn',
+          });
+        },
+      });
+    }
+
+    this.time.delayedCall(260, () => {
+      this.cameras.main.fadeOut(680, 0, 0, 0);
+    });
+    this.time.delayedCall(980, () => {
       this.scene.start('GameScene', {
         character: this.selectedCharacter,
         worldMode: this.selectedMode,
         difficulty: this.selectedDifficulty,
+        flyIn: true,
       });
     });
   }

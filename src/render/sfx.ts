@@ -136,6 +136,12 @@ export class Sfx {
     this.noise(0.08, 0.04, 3200);
   }
 
+  powerShot(): void {
+    this.tone(160, 980, 0.5, 'sawtooth', 0.11);
+    this.tone(780, 2100, 0.35, 'triangle', 0.07);
+    this.noise(0.28, 0.08, 1800);
+  }
+
   reflect(): void {
     this.tone(880, 1760, 0.18, 'triangle', 0.09);
     this.tone(440, 1320, 0.22, 'sine', 0.05);

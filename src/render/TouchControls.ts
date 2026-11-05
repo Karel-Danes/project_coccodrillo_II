@@ -7,7 +7,8 @@ type HoldKey =
   | 'jumpHeld'
   | 'attackHeld'
   | 'rangedHeld'
-  | 'guardHeld';
+  | 'guardHeld'
+  | 'powerHeld';
 
 export type TouchRangedMode = 'none' | 'side' | 'overJump';
 
@@ -16,6 +17,8 @@ export type TouchControlsOptions = {
   ranged: TouchRangedMode;
   rangedLabel: string;
   extraLabel: string;
+  /** Mage-only charged power button, revealed with the relic. */
+  power: boolean;
 };
 
 const IDLE_FILL = 0x0f141a;
@@ -30,6 +33,8 @@ function labelSize(key: HoldKey): string {
     case 'attackHeld':
     case 'rangedHeld':
       return '18px';
+    case 'powerHeld':
+      return '15px';
     case 'guardHeld':
       return '15px';
     case 'left':
@@ -52,6 +57,7 @@ export class TouchControls {
     attackHeld: false,
     rangedHeld: false,
     guardHeld: false,
+    powerHeld: false,
   };
 
   private readonly objects: Array<
@@ -66,6 +72,9 @@ export class TouchControls {
     Phaser.GameObjects.Shape | Phaser.GameObjects.Text
   > = [];
   private rangedObjects: Array<
+    Phaser.GameObjects.Shape | Phaser.GameObjects.Text
+  > = [];
+  private powerObjects: Array<
     Phaser.GameObjects.Shape | Phaser.GameObjects.Text
   > = [];
   private guardCircle: Phaser.GameObjects.Arc | null = null;
@@ -105,6 +114,17 @@ export class TouchControls {
       this.createButton(width - 290, bottom, 64, this.options.rangedLabel, 'rangedHeld');
     } else if (this.options.showMelee) {
       this.createButton(width - 290, bottom, 62, 'ATK', 'attackHeld');
+    }
+
+    if (this.options.power) {
+      const power = this.createButton(
+        width - 445,
+        bottom,
+        56,
+        'POWER',
+        'powerHeld',
+      );
+      this.powerObjects = [power.circle, power.text];
     }
 
     const jumpX = width - 130;
@@ -158,6 +178,7 @@ export class TouchControls {
     this.objects.length = 0;
     this.guardObjects = [];
     this.rangedObjects = [];
+    this.powerObjects = [];
     this.pointerReleases.length = 0;
     this.clearHandlers.length = 0;
     this.guardCircle = null;
@@ -227,6 +248,7 @@ export class TouchControls {
     this.input.attackHeld = false;
     this.input.rangedHeld = false;
     this.input.guardHeld = false;
+    this.input.powerHeld = false;
     this.jumpTapQueued = false;
     for (const clear of this.clearHandlers) {
       clear();
@@ -235,22 +257,27 @@ export class TouchControls {
 
   private syncAuxiliaryButtons(animate: boolean): void {
     const showExtra = this.extraUnlocked && !this.throwVisible;
+    const showPower =
+      this.options.power && this.extraUnlocked && !this.throwVisible;
     for (const object of this.guardObjects) {
       object.setVisible(showExtra);
     }
     for (const object of this.rangedObjects) {
       object.setVisible(this.throwVisible);
     }
+    for (const object of this.powerObjects) {
+      object.setVisible(showPower);
+    }
 
     if (!animate || !showExtra) {
       return;
     }
 
-    for (const object of this.guardObjects) {
+    for (const object of [...this.guardObjects, ...this.powerObjects]) {
       object.setScale(0.65).setAlpha(0);
     }
     this.scene.tweens.add({
-      targets: this.guardObjects,
+      targets: [...this.guardObjects, ...this.powerObjects],
       scale: 1,
       alpha: 1,
       duration: 260,

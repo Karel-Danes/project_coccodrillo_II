@@ -434,10 +434,35 @@ export function stepEnemy(enemy: Enemy, context: EnemyStepContext): Enemy {
   const stats = statsFor(enemy.kind);
 
   if (enemy.state === 'die') {
+    if (stats.behavior !== 'flying') {
+      return {
+        ...enemy,
+        stateTime: enemy.stateTime + context.dtSeconds,
+        velocity: { x: 0, y: 0 },
+      };
+    }
+
+    const vy = Math.min(
+      enemy.velocity.y + GRAVITY * context.dtSeconds,
+      MAX_FALL_SPEED,
+    );
+    const kinematics = moveAndCollide(
+      {
+        position: enemy.position,
+        width: stats.width,
+        height: stats.height,
+      },
+      { x: 0, y: vy },
+      context.level,
+      context.dtSeconds,
+    );
+
     return {
       ...enemy,
+      position: kinematics.position,
+      velocity: { x: 0, y: kinematics.velocity.y },
+      grounded: kinematics.grounded,
       stateTime: enemy.stateTime + context.dtSeconds,
-      velocity: { x: 0, y: 0 },
     };
   }
 

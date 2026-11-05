@@ -143,6 +143,27 @@ describe('skeleton', () => {
     expect(getEnemyAttackPhase(bat)).not.toBeNull();
   });
 
+  it('drops a dead bat to the ground', () => {
+    const level = flatLevel({ x: 400, y: 40 });
+    const player = createPlayer({ x: 400, y: 40 });
+    let bat = createEnemy({
+      kind: 'bat',
+      x: 200,
+      y: 20,
+      patrolMinX: 160,
+      patrolMaxX: 240,
+    });
+    bat = damageEnemy(bat, 99);
+
+    for (let i = 0; i < 240 && !bat.grounded; i += 1) {
+      bat = stepEnemy(bat, { level, player, dtSeconds: DT_SECONDS });
+    }
+
+    expect(bat.grounded).toBe(true);
+    expect(bat.position.y).toBeCloseTo(2 * 64 - 36);
+    expect(bat.velocity.y).toBe(0);
+  });
+
   it('lets one sword swing bite deep into a nearby skeleton', () => {
     const level = flatLevel({ x: 200, y: 40 }, [
       skeletonAt(260, 240, 320),

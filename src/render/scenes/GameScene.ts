@@ -2309,9 +2309,19 @@ export class GameScene extends Phaser.Scene {
           enemy.position.y + stats.height,
         );
       } else {
+        let spriteY = enemy.position.y + stats.height / 2;
+        if (
+          enemy.kind === 'bat' &&
+          enemy.state === 'die' &&
+          enemy.grounded
+        ) {
+          const footOffset =
+            (art.feetY - art.frameHeight / 2) * art.scale;
+          spriteY = enemy.position.y + stats.height - footOffset;
+        }
         view.sprite.setPosition(
           enemy.position.x + stats.width / 2,
-          enemy.position.y + stats.height / 2,
+          spriteY,
         );
       }
 

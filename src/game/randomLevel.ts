@@ -400,7 +400,7 @@ export function generateRandomLevel(
     kind: bossKind,
     x: bossX,
     y: topY(BOSS_ROW) - bossStats.height,
-    patrolMinX: 82 * TILE_SIZE,
+    patrolMinX: 78 * TILE_SIZE,
     patrolMaxX: 94 * TILE_SIZE - bossStats.width,
     boss: true,
   });

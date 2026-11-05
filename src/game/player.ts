@@ -93,6 +93,7 @@ export function createPlayer(
     powerCharge: 0,
     powerShot: false,
     powerShotCharge: 0,
+    spikeGrace: 0,
   };
 }
 
@@ -231,6 +232,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   const definition = characterDefinition(player.character);
   const direction = horizontalIntent(input);
   const invulnerableTime = Math.max(0, player.invulnerableTime - dtSeconds);
+  const spikeGrace = Math.max(0, player.spikeGrace - dtSeconds);
   const canMelee = definition.meleeDamage > 0;
 
   let rangedCooldown = Math.max(0, player.rangedCooldown - dtSeconds);
@@ -473,6 +475,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     powerCharge,
     powerShot,
     powerShotCharge,
+    spikeGrace,
   };
 }
 

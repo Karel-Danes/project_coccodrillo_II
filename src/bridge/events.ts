@@ -67,6 +67,8 @@ export type GameEvents = {
   spellBounced: () => void;
   /** The Orc's berserk mode started. */
   berserkStarted: () => void;
+  /** The Orc was vaulted out of a spike pit. */
+  spikeRescue: (damage: number, hp: number) => void;
   /** The player used a teleport door. */
   teleported: (by: 'player' | 'enemy') => void;
 };

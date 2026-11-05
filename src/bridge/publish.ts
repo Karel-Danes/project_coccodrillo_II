@@ -81,6 +81,9 @@ export function publishEvents(
       case 'berserkStarted':
         bus.emit('berserkStarted');
         break;
+      case 'spikeRescue':
+        bus.emit('spikeRescue', event.damage, event.hp);
+        break;
       case 'teleported':
         bus.emit('teleported', event.by);
         break;

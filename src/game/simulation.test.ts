@@ -45,6 +45,37 @@ describe('Simulation', () => {
     expect(events.filter((event) => event.type === 'playerDied')).toHaveLength(1);
   });
 
+  it('vaults the Orc out of spikes for two lives instead of killing him', () => {
+    const level = parseLevel(
+      [
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '####.###############',
+        '####^###############',
+      ],
+      { tileSize: 64, spawn: { x: 276, y: 0 } },
+    );
+    const simulation = new Simulation(level, { character: 'orcBrute' });
+
+    let rescued = false;
+    for (
+      let i = 0;
+      i < 180 && simulation.state.status === 'playing' && !rescued;
+      i += 1
+    ) {
+      const events = simulation.step();
+      if (events.some((event) => event.type === 'spikeRescue')) {
+        rescued = true;
+      }
+    }
+
+    expect(rescued).toBe(true);
+    expect(simulation.state.status).toBe('playing');
+    expect(simulation.state.player.hp).toBe(5);
+    expect(simulation.state.player.state).toBe('jump');
+    expect(simulation.state.player.velocity.y).toBeLessThan(0);
+  });
+
   it('becomes inert after death', () => {
     const simulation = new Simulation(spikeLevel());
     simulation.setInput(input({ right: true }));

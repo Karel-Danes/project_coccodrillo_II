@@ -16,6 +16,7 @@ import {
   statsFor,
   stepEnemy,
 } from './enemy';
+import { tileAt } from './level';
 import { FIXED_DT_SECONDS } from './loop';
 import { moveAndCollide, overlaps } from './physics';
 import { pickupBounds } from './pickup';
@@ -39,11 +40,13 @@ import {
   grantExtraLife,
   hasFallenOutOfWorld,
   healPlayer,
+  JUMP_SPEED,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
   stepPlayer,
   touchesSpikes,
+  WALK_SPEED,
 } from './player';
 import type {
   AABB,
@@ -104,6 +107,7 @@ export type GameEvent =
   | { type: 'enemyShot' }
   | { type: 'spellBounced' }
   | { type: 'berserkStarted' }
+  | { type: 'spikeRescue'; damage: number; hp: number }
   | { type: 'teleported'; by: 'player' | 'enemy' };
 
 const NO_EVENTS: readonly GameEvent[] = [];
@@ -135,6 +139,30 @@ function playerCentre(player: Player): Vec2 {
 function islandX(island: FloatingIslandSpawn, phase: number): number {
   const wave = 0.5 - 0.5 * Math.cos(phase * Math.PI * 2);
   return island.baseX + island.travel * wave;
+}
+
+function spikeEscapeDirection(
+  level: Level,
+  player: Player,
+): -1 | 1 {
+  const col = Math.floor(
+    (player.position.x + PLAYER_WIDTH / 2) / level.tileSize,
+  );
+  const groundRow = level.rows - 2;
+
+  for (let distance = 1; distance <= 8; distance += 1) {
+    for (const direction of [-1, 1] as const) {
+      const target = col + direction * distance;
+      if (
+        tileAt(level, target, groundRow) === 'solid' ||
+        tileAt(level, target, groundRow + 1) === 'solid'
+      ) {
+        return direction;
+      }
+    }
+  }
+
+  return player.facing === 1 ? -1 : 1;
 }
 
 /**
@@ -574,9 +602,41 @@ export class Simulation {
     const playerTeleported = teleportResult.used;
 
     let reason: DeathReason | null = null;
+    let spikeRescue: { damage: number; hp: number } | null = null;
     if (touchesSpikes(this.level, player)) {
-      reason = 'spikes';
-    } else if (hasFallenOutOfWorld(this.level, player)) {
+      if (player.character === 'orcBrute' && player.spikeGrace <= 0) {
+        const direction = spikeEscapeDirection(this.level, player);
+        const damage = Math.min(2, Math.max(0, player.hp - 1));
+        player = {
+          ...player,
+          hp: player.hp - damage,
+          facing: direction,
+          state: 'jump',
+          stateTime: 0,
+          grounded: false,
+          velocity: {
+            x: direction * WALK_SPEED * 1.35,
+            y: -JUMP_SPEED * 1.15,
+          },
+          invulnerableTime: Math.max(
+            player.invulnerableTime,
+            0.8,
+          ),
+          spikeGrace: 1.35,
+          powerCharge: 0,
+          powerShot: false,
+          powerShotCharge: 0,
+        };
+        spikeRescue = { damage, hp: player.hp };
+      } else if (
+        player.character !== 'orcBrute' ||
+        player.spikeGrace <= 0
+      ) {
+        reason = 'spikes';
+      }
+    }
+
+    if (reason === null && hasFallenOutOfWorld(this.level, player)) {
       reason = 'fall';
     }
 
@@ -593,6 +653,13 @@ export class Simulation {
 
     const events: GameEvent[] = [];
     const tuning = difficultyDefinition(this.difficulty);
+    if (spikeRescue) {
+      events.push({
+        type: 'spikeRescue',
+        damage: spikeRescue.damage,
+        hp: spikeRescue.hp,
+      });
+    }
     if (playerTeleported) {
       events.push({ type: 'teleported', by: 'player' });
     }

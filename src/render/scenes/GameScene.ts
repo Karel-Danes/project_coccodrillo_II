@@ -939,6 +939,7 @@ export class GameScene extends Phaser.Scene {
     this.bus.on('playerPowerShot', this.onPlayerPowerShot, this);
     this.bus.on('spellBounced', this.onSpellBounced, this);
     this.bus.on('berserkStarted', this.onBerserkStarted, this);
+    this.bus.on('spikeRescue', this.onSpikeRescue, this);
     this.bus.on('teleported', this.onTeleported, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -955,6 +956,7 @@ export class GameScene extends Phaser.Scene {
       this.bus.off('playerPowerShot', this.onPlayerPowerShot, this);
       this.bus.off('spellBounced', this.onSpellBounced, this);
       this.bus.off('berserkStarted', this.onBerserkStarted, this);
+      this.bus.off('spikeRescue', this.onSpikeRescue, this);
       this.bus.off('teleported', this.onTeleported, this);
       keyboard.off('keydown', this.unlockAudio, this);
       this.input.off('pointerdown', this.unlockAudio, this);
@@ -1138,6 +1140,17 @@ export class GameScene extends Phaser.Scene {
     this.sfx.berserk();
     this.cameras.main.shake(180, 0.004);
     this.pushLog(`${this.heroLabel()}'s rage ignites.`);
+  }
+
+  private onSpikeRescue(damage: number, _hp: number): void {
+    this.sfx.playerHurt();
+    this.sfx.jump();
+    this.cameras.main.shake(140, 0.003);
+    this.pushLog(
+      damage > 0
+        ? `${this.heroLabel()} hit spikes: -${damage} life, vaulted out.`
+        : `${this.heroLabel()} vaulted out of the spikes.`,
+    );
   }
 
   private onPlayerPowerShot(damage: number, charge: number): void {

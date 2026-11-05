@@ -137,6 +137,43 @@ describe('golem boss', () => {
     expect(simulation.state.projectiles.length).toBeGreaterThan(0);
   });
 
+  it('lets Grakka chase the player instead of only throwing axes', () => {
+    const level = parseLevel(
+      [
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '#'.repeat(20),
+      ],
+      {
+        tileSize: 64,
+        spawn: { x: 100, y: 168 },
+        enemies: [
+          {
+            kind: 'orcBrute',
+            x: 500,
+            y: 118,
+            patrolMinX: 80,
+            patrolMaxX: 900,
+            boss: true,
+          },
+        ],
+      },
+    );
+    const simulation = new Simulation(level);
+    simulation.step();
+    simulation.resumeFromCutscene();
+
+    const startX = simulation.state.enemies[0]?.position.x ?? 0;
+    for (let i = 0; i < 120; i += 1) {
+      simulation.step();
+    }
+
+    const boss = simulation.state.enemies[0]!;
+    expect(boss.position.x).toBeLessThan(startX - 40);
+  });
+
   it('lets an unlocked guard block golem orbs', () => {
     const simulation = new Simulation(rangedArenaLevel());
     simulation.step();

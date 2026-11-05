@@ -240,6 +240,8 @@ export type Player = {
   powerShot: boolean;
   /** Charge held on the release step. */
   powerShotCharge: number;
+  /** Orc-only i-frames after being vaulted out of spikes. */
+  spikeGrace: number;
 };
 
 export type ProjectileKind =

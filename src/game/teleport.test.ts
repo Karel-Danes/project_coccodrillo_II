@@ -91,4 +91,17 @@ describe('teleport doors', () => {
 
     expect(simulation.state.player.maxHp).toBe(maxHp + 2);
   });
+
+  it('wind sigils grant a higher jump', () => {
+    const level: Level = {
+      ...flatLevel(),
+      pickups: [
+        { kind: 'skill', skill: 'jump', x: 120, y: 84 },
+      ],
+    };
+    const simulation = new Simulation(level);
+    simulation.step();
+
+    expect(simulation.state.player.jumpBonus).toBe(90);
+  });
 });

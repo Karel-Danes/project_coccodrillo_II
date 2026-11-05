@@ -40,7 +40,7 @@ describe('random world generator', () => {
     const level = generateRandomLevel(2026);
 
     for (const enemy of level.enemies) {
-      if (enemy.kind === 'bat') {
+      if (enemy.kind === 'bat' || enemy.y < 500) {
         continue;
       }
       const stats = statsFor(enemy.kind);
@@ -72,6 +72,9 @@ describe('random world generator', () => {
       expect(island.period).toBeGreaterThan(0);
       expect(island.y).toBeLessThan(16 * level.tileSize);
     }
+    expect(
+      islands.some((island) => (island.shape ?? 0) !== 0),
+    ).toBe(true);
   });
 
   it('places one reachable relic before the boss arena', () => {
@@ -142,22 +145,26 @@ describe('random world generator', () => {
     ).toBe(true);
   });
 
-  it('builds a hidden sky room with paired doors and skill sigils', () => {
+  it('builds two hidden sky rooms with paired doors and skill sigils', () => {
     const level = generateRandomLevel(42);
     const teleports = level.teleports ?? [];
-    expect(teleports).toHaveLength(2);
+    expect(teleports).toHaveLength(4);
     expect(teleports[0]?.targetId).toBe(teleports[1]?.id);
     expect(teleports[1]?.targetId).toBe(teleports[0]?.id);
+    expect(teleports[2]?.targetId).toBe(teleports[3]?.id);
+    expect(teleports[3]?.targetId).toBe(teleports[2]?.id);
 
-    const skyDoor = teleports.find((portal) => portal.y < 600);
-    expect(skyDoor).toBeDefined();
-    const col = Math.floor((skyDoor?.x ?? 0) / level.tileSize);
-    expect(tileAt(level, col, 5)).toBe('solid');
-    expect(tileAt(level, col, 2)).toBe('solid');
+    for (const skyDoor of teleports.filter((portal) => portal.y < 600)) {
+      const col = Math.floor(skyDoor.x / level.tileSize);
+      const floorRow = Math.floor(skyDoor.y / level.tileSize);
+      expect(tileAt(level, col, floorRow)).toBe('solid');
+      expect(tileAt(level, col, 1)).toBe('solid');
+    }
 
     const skills = level.pickups.filter(
       (pickup) => pickup.kind === 'skill',
     );
-    expect(skills.length).toBeGreaterThanOrEqual(3);
+    expect(skills.length).toBeGreaterThanOrEqual(4);
+    expect(level.enemies.some((enemy) => enemy.y < 500)).toBe(true);
   });
 });

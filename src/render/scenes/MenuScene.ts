@@ -105,9 +105,9 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(2);
 
     this.add
-      .text(width / 2, 58, 'COCCODRILLO-II', {
+      .text(width / 2, 48, 'COCCODRILLO-II', {
         fontFamily: 'Georgia, serif',
-        fontSize: '62px',
+        fontSize: '66px',
         color: '#f3dfa2',
         stroke: '#160f08',
         strokeThickness: 8,
@@ -118,11 +118,11 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(
         width / 2,
-        128,
+        132,
         'A ROTOSCOPED DESERT SAGA  ·  CHOOSE YOUR HERO AND YOUR WORLD',
         {
           fontFamily: 'monospace',
-          fontSize: '16px',
+          fontSize: '18px',
           color: '#9faeBE',
           letterSpacing: 2,
         },
@@ -149,25 +149,25 @@ export class MenuScene extends Phaser.Scene {
       });
 
       const preview = this.add
-        .sprite(x, 374, playerTextureKey(kind, 'idle'))
+        .sprite(x, 368, playerTextureKey(kind, 'idle'))
         .setOrigin(0.5, art.feetY / art.frameHeight)
         .setScale(art.menuScale)
         .setDepth(5)
         .play(`${art.prefix}-idle`);
 
       const name = this.add
-        .text(x, 404, definition.name, {
+        .text(x, 396, definition.name, {
           fontFamily: 'Georgia, serif',
-          fontSize: '26px',
+          fontSize: '29px',
           color: '#f3dfa2',
         })
         .setOrigin(0.5, 0)
         .setDepth(5);
 
       this.add
-        .text(x, 432, definition.epithet, {
+        .text(x, 426, definition.epithet, {
           fontFamily: 'monospace',
-          fontSize: '13px',
+          fontSize: '14px',
           color: '#7f8fa3',
         })
         .setOrigin(0.5, 0)
@@ -183,11 +183,11 @@ export class MenuScene extends Phaser.Scene {
       this.add
         .text(
           x,
-          462,
+          454,
           `♥ ${definition.maxHp}    MELEE ${melee}    RANGED ${ranged}`,
           {
             fontFamily: 'monospace',
-            fontSize: '17px',
+            fontSize: '18px',
             color: '#d9e3ec',
           },
         )
@@ -195,30 +195,30 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(5);
 
       this.add
-        .text(x, 494, `BASIC  ${definition.basicAbility}`, {
+        .text(x, 486, `BASIC  ${definition.basicAbility}`, {
           fontFamily: 'monospace',
-          fontSize: '14px',
+          fontSize: '16px',
           color: '#8fc7ff',
         })
         .setOrigin(0.5, 0)
         .setDepth(5);
 
       this.add
-        .text(x, 518, `EXTRA  ${definition.extraAbility}`, {
+        .text(x, 510, `EXTRA  ${definition.extraAbility}`, {
           fontFamily: 'monospace',
-          fontSize: '14px',
+          fontSize: '16px',
           color: '#e6c47a',
         })
         .setOrigin(0.5, 0)
         .setDepth(5);
 
       this.add
-        .text(x, 544, definition.extraDetail, {
+        .text(x, 536, definition.extraDetail, {
           fontFamily: 'monospace',
-          fontSize: '12px',
+          fontSize: '13px',
           color: '#7f8fa3',
           align: 'center',
-          wordWrap: { width: 300 },
+          wordWrap: { width: 306 },
           lineSpacing: 3,
         })
         .setOrigin(0.5, 0)
@@ -241,10 +241,10 @@ export class MenuScene extends Phaser.Scene {
     );
 
     this.add
-      .text(355, 657, 'DIFFICULTY', {
+      .text(352, 661, 'DIFFICULTY', {
         fontFamily: 'monospace',
-        fontSize: '13px',
-        color: '#74849a',
+        fontSize: '16px',
+        color: '#8b98a5',
       })
       .setOrigin(1, 0.5)
       .setDepth(4);
@@ -252,22 +252,22 @@ export class MenuScene extends Phaser.Scene {
     const difficultyOrder: Difficulty[] = ['low', 'middle', 'nightmare'];
     difficultyOrder.forEach((difficulty, index) => {
       this.createDifficultyChip(
-        455 + index * 185,
-        657,
+        450 + index * 190,
+        661,
         difficulty,
       );
     });
 
     const startButton = this.add
-      .rectangle(width / 2, 706, 360, 46, 0xd8b46a, 1)
+      .rectangle(width / 2, 708, 380, 48, 0xd8b46a, 1)
       .setStrokeStyle(2, 0xfff0c4, 0.9)
       .setDepth(3)
       .setInteractive({ useHandCursor: true });
     startButton.on('pointerdown', () => this.startGame());
     const startLabel = this.add
-      .text(width / 2, 706, 'ENTER THE WORLD', {
+      .text(width / 2, 708, 'ENTER THE WORLD', {
         fontFamily: 'monospace',
-        fontSize: '20px',
+        fontSize: '23px',
         color: '#181008',
       })
       .setOrigin(0.5)
@@ -278,7 +278,7 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(
         width / 2,
-        744,
+        742,
         '← → hero     ↑ ↓ / C world     F difficulty     ENTER begin',
         {
           fontFamily: 'monospace',
@@ -390,15 +390,15 @@ export class MenuScene extends Phaser.Scene {
     const titleText = this.add
       .text(x, 583, title, {
         fontFamily: 'monospace',
-        fontSize: '19px',
+        fontSize: '21px',
         color: '#f3dfa2',
       })
       .setOrigin(0.5, 0)
       .setDepth(4);
     this.add
-      .text(x, 606, subtitle, {
+      .text(x, 608, subtitle, {
         fontFamily: 'monospace',
-        fontSize: '12px',
+        fontSize: '14px',
         color: '#7f8fa3',
       })
       .setOrigin(0.5, 0)
@@ -414,7 +414,7 @@ export class MenuScene extends Phaser.Scene {
   ): void {
     const definition = DIFFICULTIES[difficulty];
     const background = this.add
-      .rectangle(x, y, 150, 28, 0x0c1118, 0.8)
+      .rectangle(x, y, 170, 38, 0x0c1118, 0.8)
       .setStrokeStyle(2, 0x35445a, 0.8)
       .setDepth(3)
       .setInteractive({ useHandCursor: true });
@@ -426,7 +426,7 @@ export class MenuScene extends Phaser.Scene {
     const label = this.add
       .text(x, y, definition.name, {
         fontFamily: 'monospace',
-        fontSize: '13px',
+        fontSize: '17px',
         color: '#8b98a5',
       })
       .setOrigin(0.5)

@@ -58,6 +58,10 @@ export class TouchControls {
     Phaser.GameObjects.Shape | Phaser.GameObjects.Text
   > = [];
   private readonly cleanups: Array<() => void> = [];
+  private readonly pointerReleases: Array<
+    (pointer: Phaser.Input.Pointer) => void
+  > = [];
+  private readonly clearHandlers: Array<() => void> = [];
   private guardObjects: Array<
     Phaser.GameObjects.Shape | Phaser.GameObjects.Text
   > = [];
@@ -67,6 +71,7 @@ export class TouchControls {
   private guardCircle: Phaser.GameObjects.Arc | null = null;
   private extraUnlocked = false;
   private throwVisible = false;
+  private jumpTapQueued = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -77,6 +82,12 @@ export class TouchControls {
   create(): void {
     // Mouse pointer + enough touch pointers for both thumbs and jump.
     this.scene.input.addPointer(3);
+    this.scene.input.on('pointerup', this.releasePointer, this);
+    this.scene.input.on('pointerupoutside', this.releasePointer, this);
+    window.addEventListener('blur', this.clearAll);
+    window.addEventListener('pointercancel', this.clearAll);
+    window.addEventListener('touchcancel', this.clearAll);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
 
     const height = this.scene.scale.height;
     const width = this.scene.scale.width;
@@ -128,6 +139,15 @@ export class TouchControls {
   }
 
   destroy(): void {
+    this.scene.input.off('pointerup', this.releasePointer, this);
+    this.scene.input.off('pointerupoutside', this.releasePointer, this);
+    window.removeEventListener('blur', this.clearAll);
+    window.removeEventListener('pointercancel', this.clearAll);
+    window.removeEventListener('touchcancel', this.clearAll);
+    document.removeEventListener(
+      'visibilitychange',
+      this.onVisibilityChange,
+    );
     for (const cleanup of this.cleanups) {
       cleanup();
     }
@@ -138,6 +158,8 @@ export class TouchControls {
     this.objects.length = 0;
     this.guardObjects = [];
     this.rangedObjects = [];
+    this.pointerReleases.length = 0;
+    this.clearHandlers.length = 0;
     this.guardCircle = null;
   }
 
@@ -147,7 +169,7 @@ export class TouchControls {
     }
 
     if (!visible) {
-      this.clearInput();
+      this.clearAll();
       return;
     }
 
@@ -179,6 +201,38 @@ export class TouchControls {
     this.syncAuxiliaryButtons(false);
   }
 
+  /** True once after the jump button is pressed, even on a very short tap. */
+  consumeJumpTap(): boolean {
+    const queued = this.jumpTapQueued;
+    this.jumpTapQueued = false;
+    return queued;
+  }
+
+  private onVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.clearAll();
+    }
+  };
+
+  private releasePointer(pointer: Phaser.Input.Pointer): void {
+    for (const release of this.pointerReleases) {
+      release(pointer);
+    }
+  }
+
+  private clearAll = (): void => {
+    this.input.left = false;
+    this.input.right = false;
+    this.input.jumpHeld = false;
+    this.input.attackHeld = false;
+    this.input.rangedHeld = false;
+    this.input.guardHeld = false;
+    this.jumpTapQueued = false;
+    for (const clear of this.clearHandlers) {
+      clear();
+    }
+  };
+
   private syncAuxiliaryButtons(animate: boolean): void {
     const showExtra = this.extraUnlocked && !this.throwVisible;
     for (const object of this.guardObjects) {
@@ -202,15 +256,6 @@ export class TouchControls {
       duration: 260,
       ease: 'Back.Out',
     });
-  }
-
-  private clearInput(): void {
-    this.input.left = false;
-    this.input.right = false;
-    this.input.jumpHeld = false;
-    this.input.attackHeld = false;
-    this.input.rangedHeld = false;
-    this.input.guardHeld = false;
   }
 
   private createButton(
@@ -249,6 +294,9 @@ export class TouchControls {
     const press = (pointer: Phaser.Input.Pointer): void => {
       pointers.add(pointer.id);
       this.input[key] = true;
+      if (key === 'jumpHeld') {
+        this.jumpTapQueued = true;
+      }
       circle.setFillStyle(ACTIVE_FILL, ACTIVE_ALPHA);
     };
 
@@ -262,11 +310,18 @@ export class TouchControls {
 
     circle.on('pointerdown', press);
     circle.on('pointerup', release);
+    circle.on('pointerupoutside', release);
     circle.on('pointerout', release);
+    this.pointerReleases.push(release);
+    this.clearHandlers.push(() => {
+      pointers.clear();
+      circle.setFillStyle(IDLE_FILL, FILL_ALPHA);
+    });
 
     this.cleanups.push(() => {
       circle.off('pointerdown', press);
       circle.off('pointerup', release);
+      circle.off('pointerupoutside', release);
       circle.off('pointerout', release);
     });
 

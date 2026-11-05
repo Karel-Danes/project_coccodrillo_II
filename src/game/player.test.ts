@@ -9,6 +9,7 @@ import {
   getAttackPhase,
   GRAVITY,
   healPlayer,
+  JUMP_SPEED,
   PLAYER_INVULNERABILITY,
   PLAYER_MAX_HP,
   PLAYER_WIDTH,
@@ -146,6 +147,16 @@ describe('player state machine', () => {
     expect(jumping.state).toBe('jump');
     expect(jumping.velocity.x).toBe(0);
     expect(jumping.velocity.y).toBeLessThan(0);
+  });
+
+  it('jumps higher with a wind sigil bonus', () => {
+    const level = flatLevel();
+    const standing = { ...settle(level), jumpBonus: 90 };
+    const jumping = step(standing, level, IDLE, true);
+
+    expect(jumping.velocity.y).toBeCloseTo(
+      -(JUMP_SPEED + 90) + GRAVITY * DT_SECONDS,
+    );
   });
 
   it('stops at a wall instead of leaving the level', () => {

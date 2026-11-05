@@ -250,6 +250,7 @@ export class GameScene extends Phaser.Scene {
   });
   private startLevel: Level = CAMPAIGN_LEVEL;
   private tick = 0;
+  private jumpBufferUntil = 0;
 
   private playerSprite!: Phaser.GameObjects.Sprite;
   private cameraFocus!: Phaser.GameObjects.Zone;
@@ -367,6 +368,7 @@ export class GameScene extends Phaser.Scene {
     this.postRunMenu = [];
     this.loop.reset();
     this.tick = 0;
+    this.jumpBufferUntil = 0;
 
     this.startLevel = resolveLevel(this.config);
     this.simulation = new Simulation(this.startLevel, {
@@ -514,7 +516,9 @@ export class GameScene extends Phaser.Scene {
             ? 0xffb36a
             : pickup.skill === 'ranged'
               ? 0x8fe8ff
-              : 0xff86b8;
+              : pickup.skill === 'jump'
+                ? 0xaaffc4
+                : 0xff86b8;
         sprite.setBlendMode(Phaser.BlendModes.ADD).setTint(color);
 
         const x = pickup.position.x;
@@ -829,6 +833,12 @@ export class GameScene extends Phaser.Scene {
 
     const touch = this.touchControls?.input;
 
+    if (this.touchControls?.consumeJumpTap()) {
+      this.jumpBufferUntil = this.time.now + 170;
+    }
+    const bufferedJump =
+      this.time.now < this.jumpBufferUntil && touch?.jumpHeld !== true;
+
     this.simulation.setInput({
       left:
         this.cursors.left.isDown || this.keyA.isDown || touch?.left === true,
@@ -837,7 +847,8 @@ export class GameScene extends Phaser.Scene {
       jumpHeld:
         this.cursors.space.isDown ||
         this.cursors.up.isDown ||
-        touch?.jumpHeld === true,
+        touch?.jumpHeld === true ||
+        bufferedJump,
       attackHeld: this.keyX.isDown || touch?.attackHeld === true,
       rangedHeld: this.keyZ.isDown || touch?.rangedHeld === true,
       guardHeld: this.keyC.isDown || touch?.guardHeld === true,
@@ -905,7 +916,9 @@ export class GameScene extends Phaser.Scene {
           ? 'STORM SIGIL · +2 RANGED'
           : skill === 'vitality'
             ? 'VITALITY SIGIL · +2 LIFE'
-            : 'BLADE SIGIL · +2 MELEE',
+            : skill === 'jump'
+              ? 'WIND SIGIL · HIGHER JUMPS'
+              : 'BLADE SIGIL · +2 MELEE',
       );
     } else {
       this.sfx.heal();
@@ -1626,48 +1639,76 @@ export class GameScene extends Phaser.Scene {
       view.clear();
       view.setPosition(island.x, island.y);
 
-      // Stone underside and mossy top.
-      view
-        .fillStyle(0x1d2533, 0.98)
-        .fillRoundedRect(0, 0, island.width, 24, 7);
-      view
-        .fillStyle(0x3a475c, 1)
-        .fillRect(0, 5, island.width, 13);
-      view
-        .fillStyle(0x53657e, 1)
-        .fillRect(0, 5, island.width, 4);
-      view
-        .fillStyle(0x4f7a5d, 1)
-        .fillRect(0, 0, island.width, 5);
-      view
-        .fillStyle(0x7fae7a, 0.9)
-        .fillRect(0, 0, island.width, 2);
+      const w = island.width;
+      const shape = (island.shape ?? index) % 3;
+      const cx = w / 2;
 
-      // A few hanging rock teeth make the island read as a floating chunk.
-      const teeth = Math.max(2, Math.floor(island.width / 44));
-      for (let tooth = 0; tooth < teeth; tooth += 1) {
-        const tx =
-          10 +
-          (tooth * (island.width - 20)) / Math.max(1, teeth - 1);
+      if (shape === 0) {
         view
-          .fillStyle(0x18202c, 0.95)
-          .fillTriangle(tx - 9, 23, tx + 9, 23, tx, 34);
+          .fillStyle(0x1d2533, 0.98)
+          .fillRoundedRect(0, 0, w, 24, 7);
+      } else if (shape === 1) {
+        view.fillStyle(0x1d2533, 0.98).fillPoints(
+          [
+            { x: 0, y: 0 },
+            { x: w, y: 0 },
+            { x: w - 18, y: 17 },
+            { x: w * 0.68, y: 28 },
+            { x: cx, y: 20 },
+            { x: w * 0.32, y: 28 },
+            { x: 18, y: 17 },
+          ],
+          true,
+        );
+      } else {
+        view.fillStyle(0x1d2533, 0.98).fillPoints(
+          [
+            { x: 0, y: 0 },
+            { x: w, y: 0 },
+            { x: w, y: 11 },
+            { x: w - 24, y: 21 },
+            { x: w - 48, y: 14 },
+            { x: w * 0.52, y: 27 },
+            { x: 34, y: 18 },
+            { x: 0, y: 15 },
+          ],
+          true,
+        );
       }
 
-      // Gold taxi runes.
-      const cx = island.width / 2;
+      view.fillStyle(0x3a475c, 1).fillRect(0, 5, w, 12);
+      view.fillStyle(0x53657e, 1).fillRect(0, 5, w, 4);
+      view.fillStyle(0x4f7a5d, 1).fillRect(0, 0, w, 5);
+      view.fillStyle(0x7fae7a, 0.9).fillRect(0, 0, w, 2);
+
+      if (shape === 0) {
+        const teeth = Math.max(2, Math.floor(w / 44));
+        for (let tooth = 0; tooth < teeth; tooth += 1) {
+          const tx =
+            10 + (tooth * (w - 20)) / Math.max(1, teeth - 1);
+          view
+            .fillStyle(0x18202c, 0.95)
+            .fillTriangle(tx - 9, 23, tx + 9, 23, tx, 34);
+        }
+      }
+
+      // A small rune marks the island as rideable without pointing anywhere.
       view
-        .lineStyle(2, 0xd8b46a, 0.55)
-        .lineBetween(cx - 14, 12, cx + 14, 12);
-      view
-        .fillStyle(0xe8c77a, 0.85)
-        .fillTriangle(cx - 22, 12, cx - 14, 8, cx - 14, 16)
-        .fillTriangle(cx + 22, 12, cx + 14, 8, cx + 14, 16);
+        .fillStyle(0xd8b46a, 0.7)
+        .fillPoints(
+          [
+            { x: cx, y: 7 },
+            { x: cx + 5, y: 12 },
+            { x: cx, y: 17 },
+            { x: cx - 5, y: 12 },
+          ],
+          true,
+        );
 
       // A faint glow beneath distinguishes a rideable island from scenery.
       view
         .fillStyle(0x8fd0ff, 0.08)
-        .fillEllipse(cx, 30, island.width * 0.8, 18);
+        .fillEllipse(cx, 30, w * 0.8, 18);
     });
 
     for (

@@ -602,6 +602,8 @@ export class Simulation {
           player = { ...player, bonusMelee: player.bonusMelee + 2 };
         } else if (skill === 'ranged') {
           player = { ...player, bonusRanged: player.bonusRanged + 2 };
+        } else if (skill === 'jump') {
+          player = { ...player, jumpBonus: player.jumpBonus + 90 };
         } else {
           const maxHp = player.maxHp + 2;
           player = {

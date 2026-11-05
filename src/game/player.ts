@@ -82,6 +82,7 @@ export function createPlayer(
     rangedStarted: false,
     bonusMelee: 0,
     bonusRanged: 0,
+    jumpBonus: 0,
     berserkTime: 0,
     berserkCooldown: 0,
     berserkStarted: false,
@@ -346,7 +347,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
       state = 'jump';
       stateTime = 0;
       vx = direction * speed;
-      vy = -JUMP_SPEED;
+      vy = -(JUMP_SPEED + player.jumpBonus);
     } else {
       state = direction !== 0 ? 'walk' : 'idle';
       stateTime = 0;
@@ -421,6 +422,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     rangedStarted,
     bonusMelee: player.bonusMelee,
     bonusRanged: player.bonusRanged,
+    jumpBonus: player.jumpBonus,
     berserkTime,
     berserkCooldown,
     berserkStarted,

@@ -1,64 +1,74 @@
 import { tileAt } from './level';
+import { parseLevel } from './level';
 import { LEVEL_01, TILE_SIZE } from './levels';
+import { createSeededRandom } from './randomLevel';
+import { carveSkyRoomChain } from './skyRooms';
 import type {
   DecorationSpawn,
   FloatingIslandSpawn,
   Level,
-  PickupSpawn,
-  SkillKind,
-  TeleportSpawn,
   TileType,
 } from './types';
 
-const ROOM_START = 54;
-const ROOM_WIDTH = 12;
-const ROOM_CEIL_ROW = 2;
-const ROOM_FLOOR_ROW = 5;
 const GROUND_ROW = 16;
-const ROOM_FLOOR_Y = ROOM_FLOOR_ROW * TILE_SIZE;
 const GROUND_Y = GROUND_ROW * TILE_SIZE;
 
-function buildCampaignLevel(): Level {
-  const tiles: TileType[] = [...LEVEL_01.tiles];
-  const setTile = (col: number, row: number, tile: TileType): void => {
-    tiles[row * LEVEL_01.cols + col] = tile;
-  };
-
-  // Carve a hidden sky room high above the existing route.
-  for (
-    let col = ROOM_START - 1;
-    col <= ROOM_START + ROOM_WIDTH;
-    col += 1
-  ) {
-    setTile(col, ROOM_CEIL_ROW, 'solid');
-    setTile(col, ROOM_FLOOR_ROW, 'solid');
+function tileToChar(tile: TileType): string {
+  if (tile === 'solid') {
+    return '#';
   }
-  for (
-    let row = ROOM_CEIL_ROW;
-    row <= ROOM_FLOOR_ROW;
-    row += 1
-  ) {
-    setTile(ROOM_START - 1, row, 'solid');
-    setTile(ROOM_START + ROOM_WIDTH, row, 'solid');
+  if (tile === 'spike') {
+    return '^';
   }
+  return '.';
+}
 
-  const withTerrain: Level = { ...LEVEL_01, tiles };
+function buildGrid(): string[][] {
+  return Array.from({ length: LEVEL_01.rows }, (_, row) =>
+    Array.from({ length: LEVEL_01.cols }, (_, col) =>
+      tileToChar(
+        LEVEL_01.tiles[row * LEVEL_01.cols + col] ?? 'empty',
+      ),
+    ),
+  );
+}
 
-  const findSafeGroundCol = (target: number): number => {
-    for (let distance = 0; distance < 10; distance += 1) {
-      for (const col of [target + distance, target - distance]) {
-        if (
-          col > 2 &&
-          col < LEVEL_01.cols - 2 &&
-          tileAt(withTerrain, col, GROUND_ROW) === 'solid' &&
-          tileAt(withTerrain, col, GROUND_ROW - 1) === 'empty'
-        ) {
-          return col;
-        }
+function findSafeGroundCol(grid: string[][], target: number): number {
+  for (let distance = 0; distance < 10; distance += 1) {
+    for (const col of [target + distance, target - distance]) {
+      if (
+        col > 2 &&
+        col < LEVEL_01.cols - 2 &&
+        grid[GROUND_ROW]?.[col] === '#' &&
+        grid[GROUND_ROW - 1]?.[col] === '.'
+      ) {
+        return col;
       }
     }
-    return 27;
-  };
+  }
+  return 27;
+}
+
+function buildCampaignLevel(): Level {
+  const grid = buildGrid();
+  const groundPortalCol = findSafeGroundCol(grid, 27);
+  const rng = createSeededRandom(0xc0cc0d11);
+
+  const sky = carveSkyRoomChain(grid, {
+    cols: LEVEL_01.cols,
+    groundPortalCol,
+    groundY: GROUND_Y,
+    rng,
+    difficulty: 'middle',
+  });
+
+  const rows = grid.map((row) => row.join(''));
+  const withTerrain = parseLevel(rows, {
+    tileSize: TILE_SIZE,
+    spawn: LEVEL_01.spawn,
+    enemies: [...LEVEL_01.enemies, ...sky.enemies],
+    pickups: [...LEVEL_01.pickups, ...sky.pickups],
+  });
 
   const laneClear = (
     baseX: number,
@@ -151,12 +161,10 @@ function buildCampaignLevel(): Level {
         candidate.y,
       )
     ) {
-      islands.push(candidate);
+      islands.push({ ...candidate, shape: islands.length % 3 });
       continue;
     }
 
-    // The stair tops sit at row 11. A sky lane at row 10 is always clear and
-    // still reachable from those ledges.
     const highY = 10 * TILE_SIZE;
     if (
       laneClear(
@@ -166,7 +174,7 @@ function buildCampaignLevel(): Level {
         highY,
       )
     ) {
-      islands.push({ ...candidate, y: highY });
+      islands.push({ ...candidate, y: highY, shape: islands.length % 3 });
     }
   }
 
@@ -188,42 +196,17 @@ function buildCampaignLevel(): Level {
     });
   });
 
-  const groundPortalCol = findSafeGroundCol(27);
-  const groundDoorX =
-    groundPortalCol * TILE_SIZE + TILE_SIZE / 2;
-  const skyDoorX =
-    (ROOM_START + Math.floor(ROOM_WIDTH / 2)) * TILE_SIZE +
-    TILE_SIZE / 2;
-
-  const teleports: TeleportSpawn[] = [
-    { id: 0, targetId: 1, x: groundDoorX, y: GROUND_Y },
-    { id: 1, targetId: 0, x: skyDoorX, y: ROOM_FLOOR_Y },
-  ];
-
-  const skills: SkillKind[] = ['melee', 'ranged', 'vitality'];
-  const skillCols = [
-    ROOM_START + 1,
-    ROOM_START + 4,
-    ROOM_START + ROOM_WIDTH - 2,
-  ];
-  const skillPickups: PickupSpawn[] = skills.map((skill, index) => ({
-    kind: 'skill',
-    skill,
-    x: (skillCols[index] ?? ROOM_START + 4) * TILE_SIZE,
-    y: ROOM_FLOOR_Y - 38,
-  }));
-
   return {
     ...withTerrain,
-    pickups: [...LEVEL_01.pickups, ...skillPickups],
     islands,
-    teleports,
+    teleports: sky.teleports,
     decorations,
   };
 }
 
 /**
  * Campaign world: the original LEVEL_01 route and enemy design, extended with
- * taxi islands, scenery, and a hidden sky room reached through paired doors.
+ * taxi islands, scenery, and two hidden sky chambers reached through paired
+ * doors.
  */
 export const CAMPAIGN_LEVEL: Level = buildCampaignLevel();

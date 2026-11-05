@@ -7,6 +7,7 @@ import { parseLevel } from './level';
 import { TILE_SIZE } from './levels';
 import { PLAYER_HEIGHT } from './player';
 import { RANDOM_BOSSES, type BossKind } from './characters';
+import { carveSkyRoomChain } from './skyRooms';
 import type {
   DecorationSpawn,
   Difficulty,
@@ -15,8 +16,6 @@ import type {
   FloatingIslandSpawn,
   Level,
   PickupSpawn,
-  SkillKind,
-  TeleportSpawn,
 } from './types';
 
 const COLS = 96;
@@ -284,6 +283,7 @@ export function generateRandomLevel(
         travel,
         period: high ? 7 + rng() * 4 : 5 + rng() * 3,
         phase: rng(),
+        shape: Math.floor(rng() * 3),
       });
       placed = true;
       break;
@@ -321,6 +321,7 @@ export function generateRandomLevel(
           travel: fallbackTravel,
           period: 7 + rng() * 3,
           phase: rng(),
+          shape: Math.floor(rng() * 3),
         });
         break;
       }
@@ -436,46 +437,18 @@ export function generateRandomLevel(
     y: groundY - 40,
   });
 
-  // A hidden sky room, reachable only through paired teleport doors.
+  // Two connected hidden sky rooms, reached through paired doors.
   const portalGroundCol = safeGroundCol(18 + Math.floor(rng() * 10));
-  const roomWidth = 10 + Math.floor(rng() * 4);
-  const roomStart = 24 + Math.floor(rng() * 12);
-  const roomFloorRow = 5;
-  const roomCeilRow = 2;
-  const roomFloorY = roomFloorRow * TILE_SIZE;
-
-  for (let col = roomStart - 1; col <= roomStart + roomWidth; col += 1) {
-    grid[roomCeilRow]![col] = '#';
-    grid[roomFloorRow]![col] = '#';
-  }
-  for (let row = roomCeilRow; row <= roomFloorRow; row += 1) {
-    grid[row]![roomStart - 1] = '#';
-    grid[row]![roomStart + roomWidth] = '#';
-  }
-
-  const skills: SkillKind[] = ['melee', 'ranged', 'vitality'];
-  const skillCols = [
-    roomStart + 2,
-    roomStart + 4,
-    roomStart + roomWidth - 3,
-  ];
-  skills.forEach((skill, index) => {
-    pickups.push({
-      kind: 'skill',
-      skill,
-      x: (skillCols[index] ?? roomStart + 4) * TILE_SIZE,
-      y: roomFloorY - 38,
-    });
+  const sky = carveSkyRoomChain(grid, {
+    cols: COLS,
+    groundPortalCol: portalGroundCol,
+    groundY,
+    rng,
+    difficulty,
   });
-
-  const groundDoorX = portalGroundCol * TILE_SIZE + TILE_SIZE / 2;
-  const skyDoorX =
-    (roomStart + Math.floor(roomWidth / 2)) * TILE_SIZE +
-    TILE_SIZE / 2;
-  const teleports: TeleportSpawn[] = [
-    { id: 0, targetId: 1, x: groundDoorX, y: groundY },
-    { id: 1, targetId: 0, x: skyDoorX, y: roomFloorY },
-  ];
+  pickups.push(...sky.pickups);
+  enemies.push(...sky.enemies);
+  const teleports = sky.teleports;
 
   const rows = grid.map((row) => row.join(''));
   const level = parseLevel(rows, {

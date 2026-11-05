@@ -113,7 +113,11 @@ export type Enemy = {
 
 export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact' | 'skill';
 
-export type SkillKind = 'melee' | 'ranged' | 'vitality';
+export type SkillKind =
+  | 'melee'
+  | 'ranged'
+  | 'vitality'
+  | 'jump';
 
 export type PickupSpawn = {
   kind: PickupKind;
@@ -156,6 +160,8 @@ export type FloatingIslandSpawn = {
   period: number;
   /** 0-1 offset into the cycle. */
   phase: number;
+  /** Visual silhouette variant. */
+  shape?: number;
 };
 
 export type FloatingIsland = FloatingIslandSpawn & {
@@ -219,6 +225,8 @@ export type Player = {
   /** Permanent sky-room sigil bonuses. */
   bonusMelee: number;
   bonusRanged: number;
+  /** Extra upward speed from wind sigils. */
+  jumpBonus: number;
   /** Orc berserk remaining time, in seconds. */
   berserkTime: number;
   berserkCooldown: number;

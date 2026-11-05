@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseLevel } from './level';
+import { MANA_MAX } from './player';
 import { Simulation } from './simulation';
 import type { InputState, Level } from './types';
 
@@ -106,5 +107,37 @@ describe('teleport doors', () => {
     simulation.step();
 
     expect(simulation.state.player.jumpBonus).toBe(90);
+  });
+
+  it('mana wells restore three mana and are consumed', () => {
+    const level: Level = {
+      ...flatLevel(),
+      pickups: [{ kind: 'mana', x: 120, y: 84 }],
+    };
+    const simulation = new Simulation(level, { character: 'mage' });
+    simulation.state.player.mana = 0;
+    simulation.step();
+
+    expect(simulation.state.player.mana).toBeGreaterThanOrEqual(3);
+    expect(simulation.state.player.mana).toBeLessThan(3.1);
+    expect(simulation.state.pickups[0]?.collected).toBe(true);
+
+    const after = simulation.state.player.mana;
+    simulation.step();
+    expect(simulation.state.player.mana).toBeGreaterThanOrEqual(after);
+    expect(simulation.state.player.mana).toBeLessThan(3.2);
+  });
+
+  it('leaves a mana well untouched at full mana', () => {
+    const level: Level = {
+      ...flatLevel(),
+      pickups: [{ kind: 'mana', x: 120, y: 84 }],
+    };
+    const simulation = new Simulation(level, { character: 'mage' });
+    expect(simulation.state.player.mana).toBe(MANA_MAX);
+    simulation.step();
+
+    expect(simulation.state.player.mana).toBe(MANA_MAX);
+    expect(simulation.state.pickups[0]?.collected).toBe(false);
   });
 });

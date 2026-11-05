@@ -137,6 +137,55 @@ describe('golem boss', () => {
     expect(simulation.state.projectiles.length).toBeGreaterThan(0);
   });
 
+  it('makes bosses close in instead of shooting at a bounce Mage', () => {
+    const level = parseLevel(
+      [
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '#'.repeat(20),
+      ],
+      {
+        tileSize: 64,
+        spawn: { x: 200, y: 168 },
+        enemies: [
+          {
+            kind: 'golem',
+            x: 650,
+            y: 120,
+            patrolMinX: 80,
+            patrolMaxX: 1000,
+            boss: true,
+          },
+        ],
+      },
+    );
+    const simulation = new Simulation(level, { character: 'mage' });
+    simulation.step();
+    simulation.resumeFromCutscene();
+    simulation.state.player.guardUnlocked = true;
+
+    const startX = simulation.state.enemies[0]?.position.x ?? 0;
+    let sawShot = false;
+    for (
+      let i = 0;
+      i < 180 && simulation.state.mode === 'play';
+      i += 1
+    ) {
+      const events = simulation.step();
+      if (events.some((event) => event.type === 'bossShot')) {
+        sawShot = true;
+      }
+    }
+
+    expect(sawShot).toBe(false);
+    expect(simulation.state.projectiles).toHaveLength(0);
+    expect(simulation.state.enemies[0]?.position.x).toBeLessThan(
+      startX - 100,
+    );
+  });
+
   it('lets Grakka chase the player instead of only throwing axes', () => {
     const level = parseLevel(
       [

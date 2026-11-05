@@ -13,9 +13,13 @@ describe('campaign world', () => {
     ).toEqual(LEVEL_01.enemies);
 
     const basePickups = CAMPAIGN_LEVEL.pickups.filter(
-      (pickup) => pickup.kind !== 'skill',
+      (pickup) => pickup.kind !== 'skill' && pickup.kind !== 'mana',
     );
     expect(basePickups).toEqual(LEVEL_01.pickups);
+    expect(
+      CAMPAIGN_LEVEL.pickups.filter((pickup) => pickup.kind === 'mana')
+        .length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('adds taxi islands, scenery, paired doors, and sky sigils', () => {

@@ -480,6 +480,13 @@ export function generateRandomLevel(
     x: safeGroundCol(80) * TILE_SIZE + TILE_SIZE / 2,
     y: groundY - 40,
   });
+  for (const target of [14, 48]) {
+    pickups.push({
+      kind: 'mana',
+      x: safeGroundCol(target) * TILE_SIZE + TILE_SIZE / 2,
+      y: groundY - 40,
+    });
+  }
 
   // Two connected hidden sky rooms, reached through paired doors.
   const portalGroundCol = safeGroundCol(18 + Math.floor(rng() * 10));

@@ -113,7 +113,13 @@ export type Enemy = {
   rangedDamage: number;
 };
 
-export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact' | 'skill';
+export type PickupKind =
+  | 'heart'
+  | 'coin'
+  | 'well'
+  | 'artifact'
+  | 'skill'
+  | 'mana';
 
 export type SkillKind =
   | 'melee'
@@ -244,6 +250,10 @@ export type Player = {
   powerShotCharge: number;
   /** Orc-only i-frames after being vaulted out of spikes. */
   spikeGrace: number;
+  /** Mage mana pool. */
+  mana: number;
+  /** Remaining seconds of the Mage's decay timer. */
+  bounceTime: number;
 };
 
 export type ProjectileKind =

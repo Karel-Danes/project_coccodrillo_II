@@ -49,6 +49,14 @@ export const MAX_POWER_CHARGE = 2;
 export const MIN_POWER_CHARGE = 0.12;
 export const POWER_MOVE_MULTIPLIER = 0.55;
 
+/** Mage resources. */
+export const MANA_MAX = 5;
+export const MANA_REGEN_SECONDS = 4;
+export const MANA_WELL_RESTORE = 3;
+export const BOUNCE_MANA_COST = 5;
+export const BOUNCE_DURATION = 3;
+export const POWER_MANA_COST = 2;
+
 export type PlayerStepContext = {
   level: Level;
   input: InputState;
@@ -97,6 +105,8 @@ export function createPlayer(
     powerShot: false,
     powerShotCharge: 0,
     spikeGrace: 0,
+    mana: MANA_MAX,
+    bounceTime: 0,
   };
 }
 
@@ -124,6 +134,7 @@ export function applyPlayerDamage(
       powerCharge: 0,
       powerShot: false,
       powerShotCharge: 0,
+      bounceTime: 0,
     };
   }
 
@@ -202,8 +213,7 @@ function horizontalIntent(input: InputState): -1 | 0 | 1 {
 
 function canGuard(player: Player): boolean {
   return (
-    player.guardUnlocked &&
-    (player.character === 'knight' || player.character === 'mage')
+    player.guardUnlocked && player.character === 'knight'
   );
 }
 
@@ -244,6 +254,11 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   const spikeGrace = Math.max(0, player.spikeGrace - dtSeconds);
   const canMelee = definition.meleeDamage > 0;
 
+  let mana = Math.min(
+    MANA_MAX,
+    player.mana + dtSeconds / MANA_REGEN_SECONDS,
+  );
+  let bounceTime = Math.max(0, player.bounceTime - dtSeconds);
   let rangedCooldown = Math.max(0, player.rangedCooldown - dtSeconds);
   let berserkTime = Math.max(0, player.berserkTime - dtSeconds);
   let berserkCooldown = Math.max(
@@ -265,20 +280,38 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     berserkStarted = true;
   }
 
+  // The Mage's bounce is a timed, mana-hungry shield.
+  if (
+    player.character === 'mage' &&
+    player.guardUnlocked &&
+    context.guardPressed === true &&
+    bounceTime <= 0 &&
+    mana >= BOUNCE_MANA_COST &&
+    player.state !== 'hurt'
+  ) {
+    mana -= BOUNCE_MANA_COST;
+    bounceTime = BOUNCE_DURATION;
+  }
+
   // The Orc's axe throw exists only while the rage is burning.
   const canRanged =
     definition.rangedDamage > 0 &&
     (!definition.rangedRequiresBerserk || isBerserk(player));
   const canPower =
     player.character === 'mage' && player.guardUnlocked;
-  const powerHeld = canPower && input.powerHeld === true;
-  const charging = powerHeld;
+  const powerWanted = canPower && input.powerHeld === true;
 
   let powerCharge = canPower ? player.powerCharge : 0;
   let powerShot = false;
   let powerShotCharge = 0;
   if (player.state !== 'hurt') {
-    if (powerHeld) {
+    if (
+      powerWanted &&
+      (powerCharge > 0 || mana >= POWER_MANA_COST)
+    ) {
+      if (powerCharge <= 0) {
+        mana -= POWER_MANA_COST;
+      }
       powerCharge = Math.min(
         MAX_POWER_CHARGE,
         powerCharge + dtSeconds,
@@ -293,6 +326,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   } else {
     powerCharge = 0;
   }
+  const charging = powerWanted && powerCharge > 0;
 
   const speed =
     WALK_SPEED *
@@ -485,6 +519,8 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     powerShot,
     powerShotCharge,
     spikeGrace,
+    mana,
+    bounceTime,
   };
 }
 
@@ -523,17 +559,20 @@ export function getAttackHitbox(player: Player): AABB | null {
   };
 }
 
-/** Guard negates incoming damage; enemies can call this before applying it. */
+/** Guard or the Mage's timed bubble negates incoming damage. */
 export function blocksDamage(player: Player): boolean {
+  if (player.character === 'mage') {
+    return player.guardUnlocked && player.bounceTime > 0;
+  }
   return canGuard(player) && player.state === 'guard';
 }
 
-/** The Mage's earned skill reflects hostile spells while guarding. */
+/** The Mage's earned skill reflects hostile spells while it is active. */
 export function canReflectSpells(player: Player): boolean {
   return (
     player.character === 'mage' &&
     player.guardUnlocked &&
-    player.state === 'guard'
+    player.bounceTime > 0
   );
 }
 

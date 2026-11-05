@@ -4,6 +4,9 @@ import {
   applyPlayerDamage,
   ATTACK_REACH,
   blocksDamage,
+  BOUNCE_DURATION,
+  BOUNCE_MANA_COST,
+  canReflectSpells,
   createPlayer,
   getAttackHitbox,
   getAttackPhase,
@@ -11,9 +14,12 @@ import {
   grantExtraLife,
   healPlayer,
   JUMP_SPEED,
+  MANA_MAX,
+  MANA_REGEN_SECONDS,
   PLAYER_INVULNERABILITY,
   PLAYER_MAX_HP,
   PLAYER_WIDTH,
+  POWER_MANA_COST,
   stepPlayer,
   WALK_SPEED,
   type PlayerStepContext,
@@ -47,12 +53,14 @@ function step(
   input: InputState,
   jumpPressed = false,
   attackPressed = false,
+  guardPressed = false,
 ): Player {
   const context: PlayerStepContext = {
     level,
     input,
     jumpPressed,
     attackPressed,
+    guardPressed,
     dtSeconds: DT_SECONDS,
   };
   return stepPlayer(player, context);
@@ -60,6 +68,14 @@ function step(
 
 function settle(level: Level): Player {
   let player = createPlayer(level.spawn);
+  for (let i = 0; i < 10; i += 1) {
+    player = step(player, level, IDLE);
+  }
+  return player;
+}
+
+function settleMage(level: Level): Player {
+  let player = { ...createPlayer(level.spawn, 'mage'), guardUnlocked: true };
   for (let i = 0; i < 10; i += 1) {
     player = step(player, level, IDLE);
   }
@@ -424,5 +440,107 @@ describe('sword and guard', () => {
 
     expect(player.state).toBe('guard');
     expect(blocksDamage(player)).toBe(true);
+  });
+});
+
+describe('mage mana and bounce', () => {
+  it('spends five mana on a three-second bounce that still allows movement', () => {
+    const level = flatLevel();
+    const mage = settleMage(level);
+    expect(mage.mana).toBe(MANA_MAX);
+
+    const bouncing = step(mage, level, RIGHT, false, false, true);
+    expect(bouncing.mana).toBeCloseTo(MANA_MAX - BOUNCE_MANA_COST);
+    expect(bouncing.bounceTime).toBeCloseTo(BOUNCE_DURATION);
+    expect(bouncing.state).not.toBe('guard');
+    expect(bouncing.state).toBe('walk');
+    expect(blocksDamage(bouncing)).toBe(true);
+    expect(canReflectSpells(bouncing)).toBe(true);
+
+    let player = bouncing;
+    const activeSteps = Math.ceil(BOUNCE_DURATION / DT_SECONDS) - 4;
+    for (let i = 0; i < activeSteps; i += 1) {
+      player = step(player, level, RIGHT);
+    }
+
+    expect(player.position.x).toBeGreaterThan(bouncing.position.x);
+    expect(player.bounceTime).toBeGreaterThan(0);
+    expect(blocksDamage(player)).toBe(true);
+
+    for (let i = 0; i < 10; i += 1) {
+      player = step(player, level, IDLE);
+    }
+
+    expect(player.bounceTime).toBe(0);
+    expect(blocksDamage(player)).toBe(false);
+    expect(canReflectSpells(player)).toBe(false);
+  });
+
+  it('cannot bounce without a full five-mana pool', () => {
+    const level = flatLevel();
+    const mage = { ...settleMage(level), mana: BOUNCE_MANA_COST - 0.5 };
+    const pressed = step(mage, level, GUARD, false, false, true);
+
+    expect(pressed.bounceTime).toBe(0);
+    expect(blocksDamage(pressed)).toBe(false);
+    expect(pressed.mana).toBeGreaterThan(BOUNCE_MANA_COST - 0.5);
+  });
+
+  it('regenerates one mana every four seconds and caps at five', () => {
+    const level = flatLevel();
+    let mage = { ...settleMage(level), mana: 0 };
+    const regenSteps = Math.round(MANA_REGEN_SECONDS / DT_SECONDS);
+    for (let i = 0; i < regenSteps; i += 1) {
+      mage = step(mage, level, IDLE);
+    }
+    expect(mage.mana).toBeCloseTo(1, 4);
+
+    let full = { ...mage, mana: MANA_MAX - 0.1 };
+    for (let i = 0; i < 30; i += 1) {
+      full = step(full, level, IDLE);
+    }
+    expect(full.mana).toBe(MANA_MAX);
+  });
+
+  it('spends two mana to start POWER and holds the charge for free', () => {
+    const level = flatLevel();
+    let mage = { ...settleMage(level), guardUnlocked: true };
+
+    mage = step(mage, level, { ...NO_INPUT, powerHeld: true });
+    expect(mage.mana).toBeCloseTo(MANA_MAX - POWER_MANA_COST);
+    expect(mage.powerCharge).toBeGreaterThan(0);
+
+    for (let i = 0; i < 10; i += 1) {
+      mage = step(mage, level, { ...NO_INPUT, powerHeld: true });
+    }
+    expect(mage.mana).toBeLessThan(
+      MANA_MAX - POWER_MANA_COST + 0.1,
+    );
+    expect(mage.powerCharge).toBeGreaterThan(0.12);
+
+    const released = step(mage, level, IDLE);
+    expect(released.powerShot).toBe(true);
+    expect(released.powerShotCharge).toBeGreaterThan(0.12);
+  });
+
+  it('keeps mana regeneration running while the bubble is up', () => {
+    const level = flatLevel();
+    const bouncing = step(
+      settleMage(level),
+      level,
+      GUARD,
+      false,
+      false,
+      true,
+    );
+    const startMana = bouncing.mana;
+
+    let player = bouncing;
+    for (let i = 0; i < 60; i += 1) {
+      player = step(player, level, IDLE);
+    }
+
+    expect(player.mana).toBeGreaterThan(startMana);
+    expect(player.mana).toBeLessThan(MANA_MAX);
   });
 });

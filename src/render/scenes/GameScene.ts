@@ -25,6 +25,8 @@ import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
 import {
   getAttackPhase,
   isBerserk,
+  BOUNCE_DURATION,
+  MANA_MAX,
   MAX_HUD_HEARTS,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
@@ -380,6 +382,7 @@ export class GameScene extends Phaser.Scene {
   private guardBadge!: Phaser.GameObjects.Image;
   private guardLabel!: Phaser.GameObjects.Text;
   private berserkLabel!: Phaser.GameObjects.Text;
+  private manaLabel!: Phaser.GameObjects.Text;
   private bannerText: Phaser.GameObjects.Text | null = null;
   private projectileViews: Phaser.GameObjects.Image[] = [];
 
@@ -637,6 +640,9 @@ export class GameScene extends Phaser.Scene {
       } else if (pickup.kind === 'skill') {
         texture = 'boss-glow';
         scale = 0.09;
+      } else if (pickup.kind === 'mana') {
+        texture = 'well-orb';
+        scale = 1.15;
       }
 
       const sprite = this.add
@@ -650,6 +656,10 @@ export class GameScene extends Phaser.Scene {
         sprite.play('heart-pulse');
       } else if (pickup.kind === 'well') {
         sprite.setBlendMode(Phaser.BlendModes.ADD);
+      } else if (pickup.kind === 'mana') {
+        sprite
+          .setBlendMode(Phaser.BlendModes.ADD)
+          .setTint(0x9fb4ff);
       } else if (pickup.kind === 'skill') {
         const color =
           pickup.skill === 'melee'
@@ -668,15 +678,23 @@ export class GameScene extends Phaser.Scene {
         base.lineStyle(2, color, 0.85).strokeEllipse(x, y, 68, 20);
       }
 
-      if (pickup.kind === 'well' || pickup.kind === 'artifact') {
+      if (
+        pickup.kind === 'well' ||
+        pickup.kind === 'artifact' ||
+        pickup.kind === 'mana'
+      ) {
         const x = pickup.position.x;
         const artifact = pickup.kind === 'artifact';
+        const mana = pickup.kind === 'mana';
         const y = pickup.position.y + (artifact ? 44 : 34);
+        const accent = artifact
+          ? 0xd8b46a
+          : mana
+            ? 0x8fb4ff
+            : 0x6f7f9c;
         base = this.add.graphics().setDepth(2);
         base.fillStyle(0x161d29, 0.95).fillEllipse(x, y, 86, 28);
-        base
-          .lineStyle(3, artifact ? 0xd8b46a : 0x6f7f9c, 0.9)
-          .strokeEllipse(x, y, 86, 28);
+        base.lineStyle(3, accent, 0.9).strokeEllipse(x, y, 86, 28);
         base
           .fillStyle(artifact ? 0x4a6c7a : 0x3e6472, 0.7)
           .fillEllipse(x, y - 5, 58, 12);
@@ -758,6 +776,17 @@ export class GameScene extends Phaser.Scene {
           fontFamily: 'monospace',
           fontSize: '14px',
           color: '#ff9b6a',
+        })
+        .setScrollFactor(0)
+        .setDepth(22)
+        .setVisible(false),
+    );
+    this.manaLabel = this.addHud(
+      this.add
+        .text(58, 266, '', {
+          fontFamily: 'monospace',
+          fontSize: '15px',
+          color: '#8fd0ff',
         })
         .setScrollFactor(0)
         .setDepth(22)
@@ -1133,6 +1162,10 @@ export class GameScene extends Phaser.Scene {
       this.pushLog(
         `${this.heroLabel()} absorbed a sigil: ${effect}.`,
       );
+    } else if (kind === 'mana') {
+      this.sfx.heal();
+      this.showBanner('MANA +3');
+      this.pushLog(`${this.heroLabel()} restored 3 mana.`);
     } else {
       this.sfx.heal();
       this.pushLog(`${this.heroLabel()} recovered health.`);
@@ -2261,6 +2294,10 @@ export class GameScene extends Phaser.Scene {
         view.sprite.setScale(
           1.3 + Math.sin(this.time.now / 280 + view.phase) * 0.06,
         );
+      } else if (view.kind === 'mana') {
+        view.sprite.setScale(
+          1.15 + Math.sin(this.time.now / 240 + view.phase) * 0.05,
+        );
       } else if (view.kind === 'skill') {
         view.sprite.setScale(
           0.085 + Math.sin(this.time.now / 220 + view.phase) * 0.012,
@@ -2345,6 +2382,14 @@ export class GameScene extends Phaser.Scene {
         );
     } else {
       this.berserkLabel.setVisible(false);
+    }
+
+    if (player.character === 'mage') {
+      this.manaLabel
+        .setVisible(true)
+        .setText(`MANA ${Math.floor(player.mana)}/${MANA_MAX}`);
+    } else {
+      this.manaLabel.setVisible(false);
     }
   }
 
@@ -2477,31 +2522,52 @@ export class GameScene extends Phaser.Scene {
     }
     const definition = characterDefinition(player.character);
 
-    if (player.state === 'guard') {
+    const mageBounce =
+      player.character === 'mage' && player.bounceTime > 0;
+    if (player.state === 'guard' || mageBounce) {
       const cx = player.position.x + PLAYER_WIDTH / 2;
       const cy = player.position.y + PLAYER_HEIGHT / 2;
       const pulse = 1 + Math.sin(this.time.now / 140) * 0.04;
       const accent = definition.accent;
+      const decay = mageBounce
+        ? Math.max(0.18, player.bounceTime / BOUNCE_DURATION)
+        : 1;
+      const bubbleScale = 0.88 + 0.12 * decay;
 
       this.guardFx
-        .fillStyle(accent, 0.1)
-        .fillEllipse(cx, cy, 96 * pulse, 138 * pulse);
+        .fillStyle(accent, 0.04 + 0.1 * decay)
+        .fillEllipse(
+          cx,
+          cy,
+          96 * pulse * bubbleScale,
+          138 * pulse * bubbleScale,
+        );
       this.guardFx
-        .lineStyle(2, 0xd8f6ff, 0.55)
-        .strokeEllipse(cx, cy, 96 * pulse, 138 * pulse);
+        .lineStyle(2, 0xd8f6ff, 0.15 + 0.45 * decay)
+        .strokeEllipse(
+          cx,
+          cy,
+          96 * pulse * bubbleScale,
+          138 * pulse * bubbleScale,
+        );
 
       const start = player.facing === 1 ? -0.7 : Math.PI - 0.7;
       const end = player.facing === 1 ? 0.7 : Math.PI + 0.7;
       this.guardFx
-        .lineStyle(3, 0xd8f6ff, 0.8)
+        .lineStyle(3, 0xd8f6ff, 0.25 + 0.55 * decay)
         .beginPath()
-        .arc(cx, cy, 58, start, end)
+        .arc(cx, cy, 58 * bubbleScale, start, end)
         .strokePath();
 
       if (player.character === 'mage') {
         this.guardFx
-          .lineStyle(1.5, 0xe4d4ff, 0.55)
-          .strokeEllipse(cx, cy, 72 * pulse, 118 * pulse);
+          .lineStyle(1.5, 0xe4d4ff, 0.2 + 0.4 * decay)
+          .strokeEllipse(
+            cx,
+            cy,
+            72 * pulse * bubbleScale,
+            118 * pulse * bubbleScale,
+          );
       }
     }
 

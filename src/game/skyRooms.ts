@@ -246,6 +246,35 @@ export function carveSkyRoomChain(
     true,
   );
 
+  // One mana well per sky room keeps the Mage's bounce usable up in the chain.
+  const addMana = (
+    start: number,
+    width: number,
+    floorRow: number,
+    blocked: readonly number[],
+  ): number[] => {
+    const cols = chooseCols(rng, start, width, 1, [
+      ...blocked,
+      ...portalCols,
+    ]);
+    cols.forEach((col) => {
+      pickups.push({
+        kind: 'mana',
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: floorRow * TILE_SIZE - 38,
+      });
+    });
+    return cols;
+  };
+
+  const manaColsA = addMana(startA, widthA, floorA, [
+    ...blocksA,
+    ...skillColsA,
+  ]);
+  const manaColsB = addMana(startB, widthB, floorB, [
+    ...skillColsB,
+  ]);
+
   const enemyKinds: EnemyKind[] = ['skeleton', 'goblin', 'slime', 'bat'];
   const enemies: EnemySpawn[] = [];
 
@@ -297,8 +326,20 @@ export function carveSkyRoomChain(
   const creaturesA =
     1 + (tuning.kind === 'nightmare' ? 1 : 0) + (rng() < 0.4 ? 1 : 0);
   const creaturesB = 1 + (tuning.kind === 'nightmare' ? 1 : 0);
-  addCreatures(startA, widthA, floorA, [...blocksA, ...skillColsA], creaturesA);
-  addCreatures(startB, widthB, floorB, skillColsB, creaturesB);
+  addCreatures(
+    startA,
+    widthA,
+    floorA,
+    [...blocksA, ...skillColsA, ...manaColsA],
+    creaturesA,
+  );
+  addCreatures(
+    startB,
+    widthB,
+    floorB,
+    [...skillColsB, ...manaColsB],
+    creaturesB,
+  );
 
   return {
     teleports,

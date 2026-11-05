@@ -42,6 +42,8 @@ import {
   hasFallenOutOfWorld,
   healPlayer,
   JUMP_SPEED,
+  MANA_MAX,
+  MANA_WELL_RESTORE,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -790,6 +792,27 @@ export class Simulation {
         continue;
       }
 
+      if (pickup.kind === 'mana') {
+        if (player.mana >= MANA_MAX) {
+          continue;
+        }
+        pickup.collected = true;
+        player = {
+          ...player,
+          mana: Math.min(
+            MANA_MAX,
+            player.mana + MANA_WELL_RESTORE,
+          ),
+        };
+        events.push({
+          type: 'pickupCollected',
+          kind: 'mana',
+          hp: player.hp,
+          coins: this.coins,
+        });
+        continue;
+      }
+
       if (player.hp >= player.maxHp) {
         continue;
       }
@@ -980,8 +1003,15 @@ export class Simulation {
       }
     }
 
-    // Each living boss runs its own ranged attack.
-    if (this.bossIntroShown && player.state !== 'die') {
+    // Each living boss runs its own ranged attack, but bosses prefer to
+    // close in when the Mage has the bounce ability.
+    const mageHasBounce =
+      player.character === 'mage' && player.guardUnlocked;
+    if (
+      this.bossIntroShown &&
+      player.state !== 'die' &&
+      !mageHasBounce
+    ) {
       const px = player.position.x + PLAYER_WIDTH / 2;
       const py = player.position.y + PLAYER_HEIGHT * 0.55;
 

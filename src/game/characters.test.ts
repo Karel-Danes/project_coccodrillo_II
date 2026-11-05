@@ -246,7 +246,7 @@ describe('character rulebook', () => {
     expect(defeatedKind).toBe('darkKnight');
   });
 
-  it('blocks close combat while the Mage bubble is up', () => {
+  it('blocks close combat during the three-second Mage bubble', () => {
     const level = flatLevel([
       {
         kind: 'skeleton',
@@ -261,14 +261,20 @@ describe('character rulebook', () => {
     simulation.setInput({ ...NO_INPUT, guardHeld: true });
 
     let blocked = false;
-    for (let i = 0; i < 240; i += 1) {
+    let sawBubble = false;
+    for (let i = 0; i < 150; i += 1) {
       const events = simulation.step();
+      if (simulation.state.player.bounceTime > 0) {
+        sawBubble = true;
+      }
       if (events.some((event) => event.type === 'attackBlocked')) {
         blocked = true;
       }
     }
 
+    expect(sawBubble).toBe(true);
     expect(blocked).toBe(true);
+    expect(simulation.state.player.mana).toBeLessThan(1);
     expect(simulation.state.player.hp).toBe(2);
     expect(simulation.state.status).toBe('playing');
   });
@@ -305,37 +311,30 @@ describe('character rulebook', () => {
   });
 
   it('lets the Mage bounce a boss spell without taking damage', () => {
-    const level = parseLevel(
-      [
-        '.'.repeat(20),
-        '.'.repeat(20),
-        '.'.repeat(20),
-        '.'.repeat(20),
-        '#'.repeat(20),
-      ],
-      {
-        tileSize: 64,
-        spawn: { x: 200, y: 168 },
-        enemies: [
-          {
-            kind: 'golem',
-            x: 650,
-            y: 120,
-            patrolMinX: 640,
-            patrolMaxX: 700,
-          },
-        ],
-      },
-    );
-    const simulation = new Simulation(level, { character: 'mage' });
-    simulation.step();
-    simulation.resumeFromCutscene();
+    const simulation = new Simulation(flatLevel(), { character: 'mage' });
     simulation.state.player.guardUnlocked = true;
     simulation.setInput({ ...NO_INPUT, guardHeld: true });
+    simulation.step();
+
+    const player = simulation.state.player;
+    expect(player.bounceTime).toBeGreaterThan(0);
+    const orb: Projectile = {
+      position: {
+        x: player.position.x + 180,
+        y: player.position.y + 20,
+      },
+      velocity: { x: -420, y: 0 },
+      lifetime: 3,
+      owner: 'enemy',
+      kind: 'golemOrb',
+      damage: 2,
+      gravity: 0,
+    };
+    (simulation.state.projectiles as Projectile[]).push(orb);
 
     let bounced = false;
     let sawReflected = false;
-    for (let i = 0; i < 240 && simulation.state.mode === 'play'; i += 1) {
+    for (let i = 0; i < 30; i += 1) {
       const events = simulation.step();
       if (events.some((event) => event.type === 'spellBounced')) {
         bounced = true;
@@ -353,8 +352,6 @@ describe('character rulebook', () => {
 
     expect(bounced).toBe(true);
     expect(sawReflected).toBe(true);
-    const boss = simulation.state.enemies[0]!;
-    expect(boss.hp).toBeLessThan(boss.maxHp);
     expect(simulation.state.player.hp).toBe(2);
     expect(simulation.state.status).toBe('playing');
   });

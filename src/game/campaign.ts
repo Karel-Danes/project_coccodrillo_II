@@ -70,6 +70,19 @@ function buildCampaignLevel(): Level {
     pickups: [...LEVEL_01.pickups, ...sky.pickups],
   });
 
+  const manaCol = findSafeGroundCol(grid, 44);
+  const withMana: Level = {
+    ...withTerrain,
+    pickups: [
+      ...withTerrain.pickups,
+      {
+        kind: 'mana',
+        x: manaCol * TILE_SIZE + TILE_SIZE / 2,
+        y: GROUND_Y - 40,
+      },
+    ],
+  };
+
   const laneClear = (
     baseX: number,
     travel: number,
@@ -197,7 +210,7 @@ function buildCampaignLevel(): Level {
   });
 
   return {
-    ...withTerrain,
+    ...withMana,
     islands,
     teleports: sky.teleports,
     decorations,

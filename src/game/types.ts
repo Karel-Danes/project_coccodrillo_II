@@ -306,6 +306,18 @@ export type GameState = {
   bossKind: EnemyKind | null;
 };
 
+/** Persistent player growth carried between random-world levels. */
+export type PlayerProgress = {
+  hp: number;
+  maxHp: number;
+  bonusMelee: number;
+  bonusRanged: number;
+  jumpBonus: number;
+  guardUnlocked: boolean;
+  berserkPermanent: boolean;
+  coins: number;
+};
+
 /** Everything needed to start a run, passed from the menu to the world. */
 export type GameConfig = {
   character: CharacterKind;
@@ -314,6 +326,10 @@ export type GameConfig = {
   seed?: number;
   /** Chosen random boss, persisted so retries keep the same world. */
   bossKind?: EnemyKind;
+  /** 1-based random-world level. Level N contains N bosses. */
+  runLevel?: number;
+  /** Abilities and stats kept from the previous level. */
+  progress?: PlayerProgress;
   /** Play the menu-to-map fly-in when the scene first opens. */
   flyIn?: boolean;
 };

@@ -195,4 +195,80 @@ describe('Simulation', () => {
     simulation.step();
     expect(simulation.state.player.state).toBe('idle');
   });
+
+  it('only ends the run after every boss is dead', () => {
+    const level = parseLevel(
+      [
+        '.'.repeat(30),
+        '.'.repeat(30),
+        '.'.repeat(30),
+        '.'.repeat(30),
+        '#'.repeat(30),
+      ],
+      {
+        tileSize: 64,
+        spawn: { x: 100, y: 168 },
+        enemies: [
+          {
+            kind: 'golem',
+            x: 900,
+            y: 120,
+            patrolMinX: 880,
+            patrolMaxX: 1000,
+            boss: true,
+          },
+          {
+            kind: 'darkKnight',
+            x: 1100,
+            y: 120,
+            patrolMinX: 1080,
+            patrolMaxX: 1200,
+            boss: true,
+          },
+        ],
+      },
+    );
+    const simulation = new Simulation(level);
+    simulation.step();
+
+    simulation.state.enemies[0]!.state = 'die';
+    simulation.state.enemies[0]!.hp = 0;
+    const firstEvents = simulation.step();
+    expect(simulation.state.mode).toBe('play');
+    expect(
+      firstEvents.some((event) => event.type === 'bossDefeated'),
+    ).toBe(false);
+
+    simulation.state.enemies[1]!.state = 'die';
+    simulation.state.enemies[1]!.hp = 0;
+    const finalEvents = simulation.step();
+    expect(simulation.state.mode).toBe('victory');
+    expect(
+      finalEvents.some((event) => event.type === 'bossDefeated'),
+    ).toBe(true);
+  });
+
+  it('carries progress into the next random level', () => {
+    const simulation = new Simulation(flatLevel());
+    simulation.applyProgress({
+      hp: 4,
+      maxHp: 6,
+      bonusMelee: 4,
+      bonusRanged: 2,
+      jumpBonus: 90,
+      guardUnlocked: true,
+      berserkPermanent: true,
+      coins: 7,
+    });
+
+    const state = simulation.state;
+    expect(state.coins).toBe(7);
+    expect(state.player.hp).toBe(4);
+    expect(state.player.maxHp).toBe(6);
+    expect(state.player.bonusMelee).toBe(4);
+    expect(state.player.bonusRanged).toBe(2);
+    expect(state.player.jumpBonus).toBe(90);
+    expect(state.player.guardUnlocked).toBe(true);
+    expect(state.player.berserkPermanent).toBe(true);
+  });
 });

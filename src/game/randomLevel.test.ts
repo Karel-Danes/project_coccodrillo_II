@@ -44,6 +44,15 @@ describe('random world generator', () => {
     }
   });
 
+  it('spawns one boss per run level', () => {
+    for (let count = 1; count <= 3; count += 1) {
+      const level = generateRandomLevel(42, 'middle', undefined, count);
+      const bosses = level.enemies.filter((enemy) => enemy.boss === true);
+      expect(bosses).toHaveLength(count);
+      expect(new Set(bosses.map((boss) => boss.x)).size).toBe(count);
+    }
+  });
+
   it('keeps ground enemies on solid floor and pits narrow enough to jump', () => {
     const level = generateRandomLevel(2026);
 

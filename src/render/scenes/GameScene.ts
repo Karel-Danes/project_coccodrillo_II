@@ -48,6 +48,7 @@ import type {
   Pickup,
   PickupKind,
   Player,
+  PlayerProgress,
   PlayerState,
   Projectile,
   ProjectileKind,
@@ -92,6 +93,7 @@ const DEFAULT_CONFIG: GameConfig = {
   character: 'knight',
   worldMode: 'campaign',
   difficulty: DEFAULT_DIFFICULTY,
+  runLevel: 1,
   flyIn: false,
 };
 
@@ -278,6 +280,8 @@ function queryConfig(data?: Partial<GameConfig>): GameConfig {
       data?.seed ??
       (Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined),
     bossKind: isBossKind(data?.bossKind) ? data.bossKind : undefined,
+    runLevel: Math.max(1, Math.floor(data?.runLevel ?? 1)),
+    progress: data?.progress,
     flyIn: data?.flyIn ?? false,
   };
 }
@@ -311,6 +315,7 @@ function resolveLevel(config: GameConfig): Level {
       config.seed ?? randomSeed(),
       config.difficulty,
       bossOverride,
+      config.runLevel ?? 1,
     );
     if (typeof window === 'undefined') {
       return level;
@@ -403,6 +408,7 @@ export class GameScene extends Phaser.Scene {
   private endingActive = false;
   private endingComplete = false;
   private endingGeneration = 0;
+  private levelTransitioning = false;
   private endingText: Phaser.GameObjects.Text | null = null;
   private endingPrompt: Phaser.GameObjects.Text | null = null;
   private postRunMenu: Phaser.GameObjects.GameObject[] = [];
@@ -466,6 +472,7 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneTweens = [];
     this.endingActive = false;
     this.endingComplete = false;
+    this.levelTransitioning = false;
     this.endingGeneration += 1;
     this.endingText = null;
     this.endingPrompt = null;
@@ -493,6 +500,9 @@ export class GameScene extends Phaser.Scene {
       worldMode: this.config.worldMode,
       difficulty: this.config.difficulty,
     });
+    if (this.config.progress) {
+      this.simulation.applyProgress(this.config.progress);
+    }
 
     if (new URLSearchParams(window.location.search).has('guard')) {
       this.simulation.state.player.guardUnlocked = true;
@@ -807,7 +817,9 @@ export class GameScene extends Phaser.Scene {
     this.pushLog(
       this.config.worldMode === 'campaign'
         ? 'Reach the mighty Jan Zátka.'
-        : 'Find the boss and survive the ruins.',
+        : `Level ${this.config.runLevel ?? 1} · ${
+            this.config.runLevel ?? 1
+          } boss${(this.config.runLevel ?? 1) === 1 ? '' : 'es'}.`,
     );
 
     this.bossName = this.addHud(
@@ -855,6 +867,9 @@ export class GameScene extends Phaser.Scene {
     );
 
     this.deathShade.on('pointerdown', () => {
+      if (this.levelTransitioning) {
+        return;
+      }
       const state = this.simulation.state;
       if (state.status === 'dead' || state.mode === 'victory') {
         this.restart();
@@ -1206,17 +1221,14 @@ export class GameScene extends Phaser.Scene {
       return enemyLabel(source);
     }
 
-    if (
-      source === 'golemOrb' ||
-      source === 'darkOrb' ||
-      source === 'axe'
-    ) {
-      const bossKind = this.simulation.state.bossKind;
-      if (bossKind !== null && isBossKind(bossKind)) {
-        return `${enemyLabel(bossKind)}'s ${
-          source === 'axe' ? 'axe' : 'spell'
-        }`;
-      }
+    if (source === 'golemOrb') {
+      return `${enemyLabel('golem')}'s spell`;
+    }
+    if (source === 'darkOrb') {
+      return `${enemyLabel('darkKnight')}'s spell`;
+    }
+    if (source === 'axe') {
+      return `${enemyLabel('orcBrute')}'s axe`;
     }
 
     return projectileLabel(source);
@@ -1281,7 +1293,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onBossDefeated(kind: EnemyKind): void {
-    this.pushLog(`${bossName(kind)} has fallen.`);
+    const bossCount = this.simulation.state.enemies.filter(
+      (enemy) => enemy.boss,
+    ).length;
+    this.pushLog(
+      bossCount > 1
+        ? `All ${bossCount} bosses have fallen.`
+        : `${bossName(kind)} has fallen.`,
+    );
     this.bossName.setVisible(false);
     this.bossHud.clear();
     this.enemyHud.clear();
@@ -1294,17 +1313,55 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.startRandomLevelClear();
+  }
+
+  private captureProgress(): PlayerProgress {
+    const player = this.simulation.state.player;
+    return {
+      hp: player.hp,
+      maxHp: player.maxHp,
+      bonusMelee: player.bonusMelee,
+      bonusRanged: player.bonusRanged,
+      jumpBonus: player.jumpBonus,
+      guardUnlocked: player.guardUnlocked,
+      berserkPermanent: player.berserkPermanent,
+      coins: this.simulation.state.coins,
+    };
+  }
+
+  private startRandomLevelClear(): void {
+    const cleared = this.config.runLevel ?? 1;
+    const next = cleared + 1;
+    this.levelTransitioning = true;
     this.endingActive = true;
     this.touchControls?.setVisible(false);
     this.keyboardHint.setVisible(false);
     this.debugText.setVisible(false);
+
     this.deathText.setText(
-      `${bossName(kind)} HAS FALLEN\nRANDOM WORLD CLEARED\nPRESS R FOR A NEW WORLD  ·  M FOR MENU`,
+      `LEVEL ${cleared} CLEARED\nNEXT: LEVEL ${next} · ${next} BOSS${
+        next === 1 ? '' : 'ES'
+      }\nPOWERS CARRIED FORWARD`,
     );
     this.deathShade.setVisible(true);
     this.deathText.setVisible(true);
-    this.showPostRunMenuButton();
-    this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
+
+    this.time.delayedCall(1700, () => {
+      if (!this.levelTransitioning) {
+        return;
+      }
+      const progress = this.captureProgress();
+      this.scene.restart({
+        character: this.config.character,
+        worldMode: 'random',
+        difficulty: this.config.difficulty,
+        seed: randomSeed(),
+        runLevel: next,
+        progress,
+        flyIn: true,
+      });
+    });
   }
 
   private startCampaignEnding(kind: EnemyKind): void {
@@ -1748,6 +1805,11 @@ export class GameScene extends Phaser.Scene {
       bossKind:
         this.config.worldMode === 'random'
           ? this.config.bossKind
+          : undefined,
+      runLevel: this.config.runLevel,
+      progress:
+        this.config.worldMode === 'random'
+          ? this.config.progress
           : undefined,
       flyIn: false,
     });
@@ -2355,16 +2417,24 @@ export class GameScene extends Phaser.Scene {
 
   private renderBossBar(player: Player, enemies: readonly Enemy[]): void {
     const bossKind = this.simulation.state.bossKind;
-    const boss = enemies.find(
-      (enemy) =>
-        enemy.boss ||
-        (bossKind !== null && enemy.kind === bossKind),
-    );
+    const marked = enemies.filter((enemy) => enemy.boss);
+    const bosses = marked.length
+      ? marked
+      : enemies.filter(
+          (enemy) => bossKind !== null && enemy.kind === bossKind,
+        );
+    const alive = bosses.filter((enemy) => enemy.state !== 'die');
+    const boss = alive
+      .slice()
+      .sort(
+        (a, b) =>
+          Math.abs(a.position.x - player.position.x) -
+          Math.abs(b.position.x - player.position.x),
+      )[0];
     const show =
       !this.cutsceneActive &&
       !this.endingActive &&
       boss !== undefined &&
-      boss.state !== 'die' &&
       this.simulation.state.mode !== 'victory' &&
       player.position.x > boss.position.x - 850;
 
@@ -2374,10 +2444,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.bossName.setText(
+    const label =
       this.config.worldMode === 'campaign'
         ? 'THE MIGHTY JAN ZÁTKA'
-        : bossName(boss.kind),
+        : bossName(boss.kind);
+    this.bossName.setText(
+      alive.length > 1 ? `${label} · ${alive.length} BOSSES` : label,
     );
 
     const maxHp = boss.maxHp;

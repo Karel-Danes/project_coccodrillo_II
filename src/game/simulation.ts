@@ -41,6 +41,7 @@ import {
   hasFallenOutOfWorld,
   healPlayer,
   JUMP_SPEED,
+  MAX_PLAYER_HP,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -67,6 +68,7 @@ import type {
   Pickup,
   PickupKind,
   Player,
+  PlayerProgress,
   Projectile,
   ProjectileKind,
   SkillKind,
@@ -184,7 +186,6 @@ export class Simulation {
   private mode: GameMode = 'play';
   private deathReason: DeathReason | null = null;
   private bossIntroShown = false;
-  private bossShotCooldown = 1.5;
   private readonly character: CharacterKind;
   private readonly worldMode: WorldMode;
   private readonly difficulty: Difficulty;
@@ -272,6 +273,34 @@ export class Simulation {
     this.input = { ...input };
   }
 
+  /** Carries unlocked abilities and stats into the next random level. */
+  applyProgress(progress: PlayerProgress): void {
+    const maxHp = Math.max(
+      1,
+      Math.min(MAX_PLAYER_HP, progress.maxHp),
+    );
+    const hp = Math.max(1, Math.min(maxHp, progress.hp));
+    this.coins = Math.max(0, progress.coins);
+    this.player = {
+      ...this.player,
+      maxHp,
+      hp,
+      bonusMelee: Math.max(0, progress.bonusMelee),
+      bonusRanged: Math.max(0, progress.bonusRanged),
+      jumpBonus: Math.max(0, progress.jumpBonus),
+      guardUnlocked: progress.guardUnlocked,
+      berserkPermanent: progress.berserkPermanent,
+      state: 'idle',
+      stateTime: 0,
+      velocity: { x: 0, y: 0 },
+      invulnerableTime: 0,
+      powerCharge: 0,
+      powerShot: false,
+      powerShotCharge: 0,
+      spikeGrace: 0,
+    };
+  }
+
   /** Called by the render layer once the boss speech is finished. */
   resumeFromCutscene(): void {
     if (this.mode === 'cutscene') {
@@ -279,14 +308,40 @@ export class Simulation {
     }
   }
 
-  private boss(): Enemy | undefined {
-    const marked = this.enemies.find((enemy) => enemy.boss);
-    if (marked) {
+  private bosses(): Enemy[] {
+    const marked = this.enemies.filter((enemy) => enemy.boss);
+    if (marked.length > 0) {
       return marked;
     }
     return this.bossKind === null
-      ? undefined
-      : this.enemies.find((enemy) => enemy.kind === this.bossKind);
+      ? []
+      : this.enemies.filter((enemy) => enemy.kind === this.bossKind);
+  }
+
+  private nearestAliveBoss(player: Player): Enemy | undefined {
+    let nearest: Enemy | undefined;
+    let best = Number.POSITIVE_INFINITY;
+
+    for (const boss of this.bosses()) {
+      if (boss.state === 'die') {
+        continue;
+      }
+      const stats = statsFor(boss.kind);
+      const distance = Math.hypot(
+        player.position.x +
+          PLAYER_WIDTH / 2 -
+          (boss.position.x + stats.width / 2),
+        player.position.y +
+          PLAYER_HEIGHT / 2 -
+          (boss.position.y + stats.height / 2),
+      );
+      if (distance < best) {
+        best = distance;
+        nearest = boss;
+      }
+    }
+
+    return nearest;
   }
 
   private nearestTarget(from: Vec2): Vec2 | undefined {
@@ -850,8 +905,8 @@ export class Simulation {
 
     // Boss intro: freeze everything and hand control to the cutscene.
     if (!this.bossIntroShown) {
-      const boss = this.boss();
-      if (boss && boss.state !== 'die' && player.state !== 'die') {
+      const boss = this.nearestAliveBoss(player);
+      if (boss && player.state !== 'die') {
         const bossStats = statsFor(boss.kind);
         const dx =
           player.position.x +
@@ -866,7 +921,8 @@ export class Simulation {
           this.bossIntroShown = true;
           this.mode = 'cutscene';
           this.enemies = this.enemies.map((enemy) =>
-            enemy === boss
+            enemy.boss ||
+            (this.bossKind !== null && enemy.kind === this.bossKind)
               ? {
                   ...enemy,
                   state: 'idle' as const,
@@ -921,29 +977,29 @@ export class Simulation {
       }
     }
 
-    // Boss ranged attack, then existing projectiles advance and resolve.
-    this.bossShotCooldown = Math.max(
-      0,
-      this.bossShotCooldown - FIXED_DT_SECONDS,
-    );
-    const boss = this.boss();
-    if (
-      this.bossIntroShown &&
-      boss &&
-      boss.state !== 'die' &&
-      player.state !== 'die' &&
-      this.bossKind !== null &&
-      isBossKind(this.bossKind)
-    ) {
-      const bossStats = statsFor(boss.kind);
-      const gx = boss.position.x + bossStats.width / 2;
-      const gy = boss.position.y + bossStats.height * 0.55;
+    // Each living boss runs its own ranged attack.
+    if (this.bossIntroShown && player.state !== 'die') {
       const px = player.position.x + PLAYER_WIDTH / 2;
       const py = player.position.y + PLAYER_HEIGHT * 0.55;
 
-      if (this.bossShotCooldown <= 0 && Math.abs(px - gx) < 1000) {
+      for (const boss of this.bosses()) {
+        if (
+          boss.state === 'die' ||
+          boss.rangedCooldown > 0 ||
+          !isBossKind(boss.kind)
+        ) {
+          continue;
+        }
+
+        const bossStats = statsFor(boss.kind);
+        const gx = boss.position.x + bossStats.width / 2;
+        const gy = boss.position.y + bossStats.height * 0.55;
+        if (Math.abs(px - gx) >= 1000) {
+          continue;
+        }
+
         const shot = createBossProjectile(
-          this.bossKind,
+          boss.kind,
           { x: gx, y: gy },
           { x: px, y: py },
         );
@@ -952,7 +1008,7 @@ export class Simulation {
           Math.round(shot.damage * tuning.enemyDamageMultiplier),
         );
         this.projectiles.push(shot);
-        this.bossShotCooldown = this.bossKind === 'orcBrute' ? 2 : 2.4;
+        boss.rangedCooldown = boss.kind === 'orcBrute' ? 2 : 2.4;
         events.push({ type: 'bossShot' });
       }
     }
@@ -1051,16 +1107,18 @@ export class Simulation {
     }
     this.projectiles = nextProjectiles;
 
-    // The world is cleared when its marked boss falls.
-    const defeatedBoss = this.enemies.find(
-      (enemy) =>
-        (enemy.boss || (this.bossKind !== null && enemy.kind === this.bossKind)) &&
-        enemy.state === 'die',
-    );
-    if (defeatedBoss) {
+    // The world is cleared only when every marked boss has fallen.
+    const bosses = this.bosses();
+    if (
+      bosses.length > 0 &&
+      bosses.every((boss) => boss.state === 'die')
+    ) {
       this.player = player;
       this.mode = 'victory';
-      events.push({ type: 'bossDefeated', kind: defeatedBoss.kind });
+      events.push({
+        type: 'bossDefeated',
+        kind: bosses[bosses.length - 1]!.kind,
+      });
       return [{ type: 'playerMoved', player }, ...events];
     }
 

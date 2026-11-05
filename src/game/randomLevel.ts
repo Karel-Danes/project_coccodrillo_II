@@ -58,6 +58,7 @@ export function generateRandomLevel(
   seed = randomSeed(),
   difficulty: Difficulty = DEFAULT_DIFFICULTY,
   bossKindOverride?: BossKind,
+  bossCount = 1,
 ): Level {
   const rng = createSeededRandom(seed);
   const tuning = difficultyDefinition(difficulty);
@@ -392,17 +393,58 @@ export function generateRandomLevel(
     });
   }
 
-  const bossKind: BossKind =
-    bossKindOverride ?? pick(rng, RANDOM_BOSSES);
-  const bossStats = statsFor(bossKind);
-  const bossX = 88 * TILE_SIZE + (TILE_SIZE - bossStats.width) / 2;
-  enemies.push({
-    kind: bossKind,
-    x: bossX,
-    y: topY(BOSS_ROW) - bossStats.height,
-    patrolMinX: 78 * TILE_SIZE,
-    patrolMaxX: 94 * TILE_SIZE - bossStats.width,
-    boss: true,
+  const bossKinds: BossKind[] = [];
+  const bossPool = [...RANDOM_BOSSES];
+  for (let index = bossPool.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(rng() * (index + 1));
+    const a = bossPool[index];
+    const b = bossPool[swap];
+    bossPool[index] = b!;
+    bossPool[swap] = a!;
+  }
+
+  if (bossKindOverride) {
+    bossKinds.push(bossKindOverride);
+    const overrideIndex = bossPool.indexOf(bossKindOverride);
+    if (overrideIndex >= 0) {
+      bossPool.splice(overrideIndex, 1);
+    }
+  }
+
+  const wantedBosses = Math.max(1, Math.floor(bossCount));
+  while (bossKinds.length < wantedBosses) {
+    if (bossPool.length === 0) {
+      bossPool.push(...RANDOM_BOSSES);
+    }
+    bossKinds.push(bossPool.shift()!);
+  }
+
+  const arenaStart = 80 * TILE_SIZE;
+  const arenaEnd = 94 * TILE_SIZE;
+  const slotWidth = (arenaEnd - arenaStart) / bossKinds.length;
+
+  bossKinds.forEach((kind, index) => {
+    const stats = statsFor(kind);
+    const slotStart = arenaStart + slotWidth * index;
+    const x = slotStart + (slotWidth - stats.width) / 2;
+    const patrolMinX = Math.max(arenaStart + 8, slotStart - 20);
+    const patrolMaxX = Math.min(
+      arenaEnd - stats.width - 8,
+      slotStart + slotWidth - stats.width + 20,
+    );
+
+    enemies.push({
+      kind,
+      x,
+      y: topY(BOSS_ROW) - stats.height,
+      patrolMinX:
+        patrolMinX <= patrolMaxX ? patrolMinX : arenaStart + 8,
+      patrolMaxX:
+        patrolMinX <= patrolMaxX
+          ? patrolMaxX
+          : arenaEnd - stats.width - 8,
+      boss: true,
+    });
   });
 
   const pickups: PickupSpawn[] = [

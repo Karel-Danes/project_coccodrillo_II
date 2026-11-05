@@ -1003,15 +1003,8 @@ export class Simulation {
       }
     }
 
-    // Each living boss runs its own ranged attack, but bosses prefer to
-    // close in when the Mage has the bounce ability.
-    const mageHasBounce =
-      player.character === 'mage' && player.guardUnlocked;
-    if (
-      this.bossIntroShown &&
-      player.state !== 'die' &&
-      !mageHasBounce
-    ) {
+    // Each living boss fires while it closes in for melee.
+    if (this.bossIntroShown && player.state !== 'die') {
       const px = player.position.x + PLAYER_WIDTH / 2;
       const py = player.position.y + PLAYER_HEIGHT * 0.55;
 

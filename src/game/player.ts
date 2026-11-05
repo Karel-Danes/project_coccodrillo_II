@@ -53,7 +53,7 @@ export const POWER_MOVE_MULTIPLIER = 0.55;
 export const MANA_MAX = 5;
 export const MANA_REGEN_SECONDS = 4;
 export const MANA_WELL_RESTORE = 3;
-export const BOUNCE_MANA_COST = 5;
+export const BOUNCE_MANA_COST = 2;
 export const BOUNCE_DURATION = 3;
 export const POWER_MANA_COST = 2;
 

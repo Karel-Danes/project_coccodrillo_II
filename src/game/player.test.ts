@@ -444,7 +444,7 @@ describe('sword and guard', () => {
 });
 
 describe('mage mana and bounce', () => {
-  it('spends five mana on a three-second bounce that still allows movement', () => {
+  it('spends two mana on a three-second bounce that still allows movement', () => {
     const level = flatLevel();
     const mage = settleMage(level);
     expect(mage.mana).toBe(MANA_MAX);
@@ -476,7 +476,7 @@ describe('mage mana and bounce', () => {
     expect(canReflectSpells(player)).toBe(false);
   });
 
-  it('cannot bounce without a full five-mana pool', () => {
+  it('cannot bounce below the two-mana cost', () => {
     const level = flatLevel();
     const mage = { ...settleMage(level), mana: BOUNCE_MANA_COST - 0.5 };
     const pressed = step(mage, level, GUARD, false, false, true);

@@ -382,6 +382,7 @@ export class GameScene extends Phaser.Scene {
   private guardBadge!: Phaser.GameObjects.Image;
   private guardLabel!: Phaser.GameObjects.Text;
   private berserkLabel!: Phaser.GameObjects.Text;
+  private manaBowl!: Phaser.GameObjects.Graphics;
   private manaLabel!: Phaser.GameObjects.Text;
   private bannerText: Phaser.GameObjects.Text | null = null;
   private projectileViews: Phaser.GameObjects.Image[] = [];
@@ -781,12 +782,20 @@ export class GameScene extends Phaser.Scene {
         .setDepth(22)
         .setVisible(false),
     );
+    this.manaBowl = this.addHud(
+      this.add
+        .graphics()
+        .setScrollFactor(0)
+        .setDepth(21)
+        .setVisible(false),
+    );
     this.manaLabel = this.addHud(
       this.add
-        .text(58, 266, '', {
+        .text(116, 312, '', {
           fontFamily: 'monospace',
           fontSize: '15px',
-          color: '#8fd0ff',
+          color: '#9fd8ff',
+          lineSpacing: 2,
         })
         .setScrollFactor(0)
         .setDepth(22)
@@ -2385,11 +2394,137 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (player.character === 'mage') {
-      this.manaLabel
-        .setVisible(true)
-        .setText(`MANA ${Math.floor(player.mana)}/${MANA_MAX}`);
+      this.renderManaBowl(player);
     } else {
+      this.manaBowl.setVisible(false);
       this.manaLabel.setVisible(false);
+    }
+  }
+
+  /** A large blue bowl whose fill tracks the Mage's five-point pool. */
+  private renderManaBowl(player: Player): void {
+    this.manaBowl.clear();
+    this.manaBowl.setVisible(true);
+    this.manaLabel
+      .setVisible(true)
+      .setText(`MANA\n${Math.floor(player.mana)} / ${MANA_MAX}`);
+
+    const cx = 62;
+    const top = 300;
+    const depth = 46;
+    const bowlTop = top + 8;
+    const bowlBottom = top + depth;
+    const ratio = Phaser.Math.Clamp(player.mana / MANA_MAX, 0, 1);
+    const surfaceT = 1 - ratio;
+    const surfaceY = bowlTop + (bowlBottom - bowlTop) * surfaceT;
+    const now = this.time.now;
+
+    const halfWidthAt = (t: number): number => {
+      const clamped = Phaser.Math.Clamp(t, 0, 1);
+      return 38 * Math.sqrt(Math.max(0.08, 1 - clamped * clamped * 0.86));
+    };
+
+    this.manaBowl
+      .fillStyle(0x2f7bff, 0.05 + ratio * 0.1)
+      .fillEllipse(cx, top + 28, 138, 108);
+
+    const body: Array<{ x: number; y: number }> = [];
+    const leftEdge: Array<{ x: number; y: number }> = [];
+    const rightEdge: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i <= 18; i += 1) {
+      const t = i / 18;
+      const y = top + 4 + depth * t;
+      const hw = halfWidthAt(t);
+      leftEdge.push({ x: cx - hw, y });
+      rightEdge.push({ x: cx + hw, y });
+      body.push({ x: cx - hw, y });
+    }
+    for (let i = 18; i >= 0; i -= 1) {
+      const t = i / 18;
+      body.push({
+        x: cx + halfWidthAt(t),
+        y: top + 4 + depth * t,
+      });
+    }
+
+    this.manaBowl.fillStyle(0x101a28, 0.98).fillPoints(body, true);
+    this.manaBowl
+      .fillStyle(0x050a12, 1)
+      .fillEllipse(cx, top + 6, 74, 15);
+
+    if (ratio > 0) {
+      const bands = 26;
+      const bandHeight = (bowlBottom - surfaceY) / bands;
+      for (let i = 0; i < bands; i += 1) {
+        const y = surfaceY + bandHeight * i;
+        const t = (y - bowlTop) / (bowlBottom - bowlTop);
+        const hw = halfWidthAt(t) * 0.9;
+        const shade = i / Math.max(1, bands - 1);
+        const color = Phaser.Display.Color.GetColor(
+          Math.round(74 + 34 * shade),
+          Math.round(180 - 72 * shade),
+          255,
+        );
+        this.manaBowl
+          .fillStyle(color, 0.88)
+          .fillRect(
+            cx - hw,
+            y,
+            hw * 2,
+            bandHeight + 1,
+          );
+      }
+
+      const surfaceTClamped = Phaser.Math.Clamp(
+        (surfaceY - bowlTop) / (bowlBottom - bowlTop),
+        0,
+        1,
+      );
+      const surfaceWidth =
+        halfWidthAt(surfaceTClamped) * 1.8 +
+        Math.sin(now / 260) * 2;
+      this.manaBowl
+        .fillStyle(0x9fe2ff, 0.9)
+        .fillEllipse(cx, surfaceY, surfaceWidth, 9);
+      this.manaBowl
+        .fillStyle(0x6fc8ff, 0.85)
+        .fillEllipse(cx, surfaceY + 1, surfaceWidth * 0.78, 5);
+
+      for (let i = 0; i < 3; i += 1) {
+        const phase = (now / 1900 + i * 0.34) % 1;
+        const bubbleY =
+          bowlBottom - 5 - phase * (bowlBottom - surfaceY - 5);
+        if (bubbleY > surfaceY + 3) {
+          const bubbleX =
+            cx + Math.sin(now / 420 + i * 2.1) * 16;
+          this.manaBowl
+            .fillStyle(0xc8f0ff, 0.55)
+            .fillCircle(bubbleX, bubbleY, 1.6 + (i % 2));
+        }
+      }
+    }
+
+    this.manaBowl
+      .lineStyle(2, 0x7489a3, 0.95)
+      .strokePoints(leftEdge, false);
+    this.manaBowl
+      .lineStyle(2, 0x7489a3, 0.95)
+      .strokePoints(rightEdge, false);
+    this.manaBowl
+      .lineStyle(3, 0x9db2c9, 0.95)
+      .strokeEllipse(cx, top + 5, 88, 21);
+    this.manaBowl
+      .lineStyle(1, 0xd8e8f8, 0.5)
+      .strokeEllipse(cx, top + 3, 78, 15);
+
+    for (let i = 0; i < 5; i += 1) {
+      const lit = player.mana >= i + 1;
+      const angle = Math.PI * (0.09 + i * 0.205);
+      const rivetX = cx + Math.cos(angle) * 35;
+      const rivetY = top + 6 + Math.sin(angle) * 9;
+      this.manaBowl
+        .fillStyle(lit ? 0xbdeaff : 0x2b3c52, lit ? 0.95 : 0.75)
+        .fillCircle(rivetX, rivetY, 2.8);
     }
   }
 

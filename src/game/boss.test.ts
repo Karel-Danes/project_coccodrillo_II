@@ -137,7 +137,7 @@ describe('golem boss', () => {
     expect(simulation.state.projectiles.length).toBeGreaterThan(0);
   });
 
-  it('makes bosses close in instead of shooting at a bounce Mage', () => {
+  it('keeps bosses closing in while they fire at a bounce Mage', () => {
     const level = parseLevel(
       [
         '.'.repeat(20),
@@ -165,9 +165,12 @@ describe('golem boss', () => {
     simulation.step();
     simulation.resumeFromCutscene();
     simulation.state.player.guardUnlocked = true;
+    simulation.setInput({ ...NO_INPUT, guardHeld: true });
+    simulation.step();
+    simulation.setInput(NO_INPUT);
 
     const startX = simulation.state.enemies[0]?.position.x ?? 0;
-    let sawShot = false;
+    let shots = 0;
     for (
       let i = 0;
       i < 180 && simulation.state.mode === 'play';
@@ -175,12 +178,11 @@ describe('golem boss', () => {
     ) {
       const events = simulation.step();
       if (events.some((event) => event.type === 'bossShot')) {
-        sawShot = true;
+        shots += 1;
       }
     }
 
-    expect(sawShot).toBe(false);
-    expect(simulation.state.projectiles).toHaveLength(0);
+    expect(shots).toBeGreaterThan(0);
     expect(simulation.state.enemies[0]?.position.x).toBeLessThan(
       startX - 100,
     );

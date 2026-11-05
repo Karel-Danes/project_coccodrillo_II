@@ -274,7 +274,8 @@ describe('character rulebook', () => {
 
     expect(sawBubble).toBe(true);
     expect(blocked).toBe(true);
-    expect(simulation.state.player.mana).toBeLessThan(1);
+    expect(simulation.state.player.mana).toBeGreaterThan(3);
+    expect(simulation.state.player.mana).toBeLessThan(4);
     expect(simulation.state.player.hp).toBe(2);
     expect(simulation.state.status).toBe('playing');
   });

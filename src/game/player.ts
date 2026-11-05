@@ -21,7 +21,9 @@ export const GRAVITY = 2000;
 export const MAX_FALL_SPEED = 1400;
 
 /** The Knight's three hearts, kept as the default for existing callers. */
+/** The Knight's maximum life, kept as the default for existing callers. */
 export const PLAYER_MAX_HP = 4;
+export const MAX_PLAYER_HP = 16;
 export const PLAYER_HURT_DURATION = 0.35;
 export const PLAYER_INVULNERABILITY = 1.1;
 const HURT_KNOCKBACK_X = 200;
@@ -155,9 +157,9 @@ export function healPlayer(player: Player, amount: number): Player {
   };
 }
 
-/** The Orc's relic grants three permanent extra hearts. */
+/** The Orc's relic grants three permanent extra hearts, capped by the HUD. */
 export function grantExtraLife(player: Player, amount = 3): Player {
-  const maxHp = player.maxHp + amount;
+  const maxHp = Math.min(MAX_PLAYER_HP, player.maxHp + amount);
   return {
     ...player,
     maxHp,

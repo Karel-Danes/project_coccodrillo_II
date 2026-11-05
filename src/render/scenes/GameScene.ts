@@ -25,6 +25,7 @@ import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
 import {
   getAttackPhase,
   isBerserk,
+  MAX_PLAYER_HP,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -690,8 +691,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.heartHud = [];
-    // Enough slots for the Orc's relic and stacked vitality sigils.
-    for (let i = 0; i < 16; i += 1) {
+    // The hard life cap and the number of HUD heart slots are the same.
+    for (let i = 0; i < MAX_PLAYER_HP; i += 1) {
       this.heartHud.push(
         this.addHud(
           this.add

@@ -720,12 +720,7 @@ export class Simulation {
         } else if (skill === 'jump') {
           player = { ...player, jumpBonus: player.jumpBonus + 90 };
         } else {
-          const maxHp = player.maxHp + 2;
-          player = {
-            ...player,
-            maxHp,
-            hp: Math.min(maxHp, player.hp + 2),
-          };
+          player = grantExtraLife(player, 2);
         }
         events.push({
           type: 'pickupCollected',

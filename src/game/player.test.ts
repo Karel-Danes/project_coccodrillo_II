@@ -8,8 +8,10 @@ import {
   getAttackHitbox,
   getAttackPhase,
   GRAVITY,
+  grantExtraLife,
   healPlayer,
   JUMP_SPEED,
+  MAX_PLAYER_HP,
   PLAYER_INVULNERABILITY,
   PLAYER_MAX_HP,
   PLAYER_WIDTH,
@@ -216,6 +218,27 @@ describe('health', () => {
     );
     expect(dead.hp).toBe(0);
     expect(dead.state).toBe('die');
+  });
+
+  it('never lets extra-life gains exceed the hard life cap', () => {
+    const level = flatLevel();
+    const standing = settle(level);
+    const nearCap = {
+      ...standing,
+      maxHp: MAX_PLAYER_HP - 1,
+      hp: MAX_PLAYER_HP - 2,
+    };
+
+    const capped = grantExtraLife(nearCap, 5);
+    expect(capped.maxHp).toBe(MAX_PLAYER_HP);
+    expect(capped.hp).toBeLessThanOrEqual(MAX_PLAYER_HP);
+
+    const atCap = grantExtraLife(
+      { ...nearCap, maxHp: MAX_PLAYER_HP, hp: MAX_PLAYER_HP },
+      2,
+    );
+    expect(atCap.maxHp).toBe(MAX_PLAYER_HP);
+    expect(atCap.hp).toBe(MAX_PLAYER_HP);
   });
 });
 

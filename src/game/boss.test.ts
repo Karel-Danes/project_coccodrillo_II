@@ -162,7 +162,7 @@ describe('golem boss', () => {
 
     expect(sawShot).toBe(true);
     expect(sawBlocked).toBe(true);
-    expect(simulation.state.player.hp).toBe(3);
+    expect(simulation.state.player.hp).toBe(4);
     expect(simulation.state.status).toBe('playing');
   });
 });

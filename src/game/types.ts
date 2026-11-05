@@ -308,6 +308,8 @@ export type GameConfig = {
   worldMode: WorldMode;
   difficulty: Difficulty;
   seed?: number;
+  /** Chosen random boss, persisted so retries keep the same world. */
+  bossKind?: EnemyKind;
   /** Play the menu-to-map fly-in when the scene first opens. */
   flyIn?: boolean;
 };

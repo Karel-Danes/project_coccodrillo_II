@@ -30,24 +30,24 @@ function flatLevel(
 
 describe('character rulebook', () => {
   it('starts each hero with the menu heart count', () => {
-    expect(createPlayer({ x: 0, y: 0 }, 'knight').maxHp).toBe(3);
-    expect(createPlayer({ x: 0, y: 0 }, 'mage').maxHp).toBe(2);
-    expect(createPlayer({ x: 0, y: 0 }, 'orcBrute').maxHp).toBe(6);
+    expect(createPlayer({ x: 0, y: 0 }, 'knight').maxHp).toBe(4);
+    expect(createPlayer({ x: 0, y: 0 }, 'mage').maxHp).toBe(3);
+    expect(createPlayer({ x: 0, y: 0 }, 'orcBrute').maxHp).toBe(7);
   });
 
   it('publishes the exact menu numbers for every hero', () => {
     expect(CHARACTERS.knight).toMatchObject({
-      maxHp: 3,
+      maxHp: 4,
       meleeDamage: 5,
       rangedDamage: 0,
     });
     expect(CHARACTERS.mage).toMatchObject({
-      maxHp: 2,
+      maxHp: 3,
       meleeDamage: 0,
       rangedDamage: 3,
     });
     expect(CHARACTERS.orcBrute).toMatchObject({
-      maxHp: 6,
+      maxHp: 7,
       meleeDamage: 8,
       rangedDamage: 5,
     });
@@ -174,8 +174,8 @@ describe('character rulebook', () => {
     const simulation = new Simulation(level, { character: 'orcBrute' });
     simulation.step();
 
-    expect(simulation.state.player.maxHp).toBe(9);
-    expect(simulation.state.player.hp).toBe(9);
+    expect(simulation.state.player.maxHp).toBe(10);
+    expect(simulation.state.player.hp).toBe(10);
     expect(simulation.state.player.guardUnlocked).toBe(true);
     expect(simulation.state.player.berserkPermanent).toBe(true);
 
@@ -285,7 +285,7 @@ describe('character rulebook', () => {
     expect(sawReflected).toBe(true);
     const boss = simulation.state.enemies[0]!;
     expect(boss.hp).toBeLessThan(boss.maxHp);
-    expect(simulation.state.player.hp).toBe(2);
+    expect(simulation.state.player.hp).toBe(3);
     expect(simulation.state.status).toBe('playing');
   });
 });

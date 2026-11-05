@@ -21,7 +21,7 @@ export const GRAVITY = 2000;
 export const MAX_FALL_SPEED = 1400;
 
 /** The Knight's three hearts, kept as the default for existing callers. */
-export const PLAYER_MAX_HP = 3;
+export const PLAYER_MAX_HP = 4;
 export const PLAYER_HURT_DURATION = 0.35;
 export const PLAYER_INVULNERABILITY = 1.1;
 const HURT_KNOCKBACK_X = 200;

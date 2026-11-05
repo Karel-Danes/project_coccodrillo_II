@@ -276,6 +276,7 @@ function queryConfig(data?: Partial<GameConfig>): GameConfig {
     seed:
       data?.seed ??
       (Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined),
+    bossKind: isBossKind(data?.bossKind) ? data.bossKind : undefined,
     flyIn: data?.flyIn ?? false,
   };
 }
@@ -302,10 +303,9 @@ function resolveCampaignLevel(): Level {
 
 function resolveLevel(config: GameConfig): Level {
   if (config.worldMode === 'random') {
-    const seeded =
-      typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).has('seed');
-    const bossOverride = seeded ? undefined : nextRandomBoss();
+    const bossOverride = isBossKind(config.bossKind)
+      ? config.bossKind
+      : undefined;
     const level = generateRandomLevel(
       config.seed ?? randomSeed(),
       config.difficulty,
@@ -474,6 +474,17 @@ export class GameScene extends Phaser.Scene {
     this.introTrail = null;
     this.loop.reset();
     this.jumpBufferUntil = 0;
+
+    if (
+      this.config.worldMode === 'random' &&
+      this.config.seed === undefined
+    ) {
+      this.config = {
+        ...this.config,
+        seed: randomSeed(),
+        bossKind: nextRandomBoss(),
+      };
+    }
 
     this.startLevel = resolveLevel(this.config);
     this.simulation = new Simulation(this.startLevel, {
@@ -679,15 +690,15 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.heartHud = [];
-    // Enough slots for the Orc's relic and sky-room vitality sigils.
-    for (let i = 0; i < 12; i += 1) {
+    // Enough slots for the Orc's relic and stacked vitality sigils.
+    for (let i = 0; i < 16; i += 1) {
       this.heartHud.push(
         this.addHud(
           this.add
-            .image(34 + i * 42, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
+            .image(34 + i * 50, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
             .setScrollFactor(0)
             .setDepth(22)
-            .setScale(1),
+            .setScale(1.35),
         ),
       );
     }
@@ -773,12 +784,12 @@ export class GameScene extends Phaser.Scene {
       this.add
         .text(16, 14, '', {
           fontFamily: 'monospace',
-          fontSize: '15px',
-          color: '#d7dde3',
-          backgroundColor: 'rgba(11, 13, 16, 0.82)',
-          padding: { x: 10, y: 8 },
-          lineSpacing: 5,
-          wordWrap: { width: 560 },
+          fontSize: '30px',
+          color: '#e8edf2',
+          backgroundColor: 'rgba(11, 13, 16, 0.86)',
+          padding: { x: 12, y: 10 },
+          lineSpacing: 6,
+          wordWrap: { width: 980 },
         })
         .setScrollFactor(0)
         .setDepth(20),
@@ -1071,14 +1082,14 @@ export class GameScene extends Phaser.Scene {
         definition.kind === 'orcBrute'
           ? 'BERSERK + 3 EXTRA LIFE'
           : definition.kind === 'mage'
-            ? 'SPELL BOUNCE UNLOCKED'
+            ? 'SPELL BOUNCE + POWER UNLOCKED'
             : 'DEFENCE BUBBLE UNLOCKED';
       this.showBanner(message);
       this.pushLog(
         definition.kind === 'orcBrute'
-          ? `${this.heroLabel()} found the relic: permanent berserk and +3 life.`
+          ? `${this.heroLabel()}: PERMANENT BERSERK +3 life.`
           : definition.kind === 'mage'
-            ? `${this.heroLabel()} learned Spell Bounce.`
+            ? `${this.heroLabel()} learned Spell Bounce + POWER.`
             : `${this.heroLabel()} learned the Defence Bubble.`,
       );
       this.touchControls?.setGuardVisible(true);
@@ -1147,8 +1158,8 @@ export class GameScene extends Phaser.Scene {
 
   private pushLog(message: string): void {
     this.logLines.push(message);
-    if (this.logLines.length > 6) {
-      this.logLines.splice(0, this.logLines.length - 6);
+    if (this.logLines.length > 3) {
+      this.logLines.splice(0, this.logLines.length - 3);
     }
     this.debugText.setText(this.logLines.join('\n'));
   }
@@ -1718,11 +1729,12 @@ export class GameScene extends Phaser.Scene {
       character: this.config.character,
       worldMode: this.config.worldMode,
       difficulty: this.config.difficulty,
-      // A random world should be new every run.
-      seed:
+      // Retry the same generated world; a new one only comes from the menu.
+      seed: this.config.seed,
+      bossKind:
         this.config.worldMode === 'random'
-          ? randomSeed()
-          : this.config.seed,
+          ? this.config.bossKind
+          : undefined,
       flyIn: false,
     });
   }
@@ -1843,16 +1855,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createZoomControls(viewWidth: number): void {
-    const y = 40;
-    const minusX = viewWidth - 160;
-    const plusX = viewWidth - 40;
-    const labelX = viewWidth - 100;
+    const y = 42;
+    const minusX = viewWidth - 180;
+    const plusX = viewWidth - 48;
+    const labelX = viewWidth - 114;
 
     const create = (x: number, label: string, delta: number): void => {
       const circle = this.addHud(
         this.add
-          .circle(x, y, 28, 0x10161d, 0.55)
-          .setStrokeStyle(2, 0x6a7785, 0.9)
+          .circle(x, y, 34, 0x10161d, 0.6)
+          .setStrokeStyle(2, 0x7d8b9b, 0.95)
           .setScrollFactor(0)
           .setDepth(23)
           .setInteractive(),
@@ -1861,8 +1873,8 @@ export class GameScene extends Phaser.Scene {
         this.add
           .text(x, y, label, {
             fontFamily: 'monospace',
-            fontSize: '28px',
-            color: '#d7dde3',
+            fontSize: '32px',
+            color: '#eef2f6',
           })
           .setOrigin(0.5)
           .setScrollFactor(0)
@@ -1876,9 +1888,9 @@ export class GameScene extends Phaser.Scene {
 
     this.zoomLabel = this.addHud(
       this.add
-        .text(labelX, 82, '', {
+        .text(labelX, 90, '', {
           fontFamily: 'monospace',
-          fontSize: '17px',
+          fontSize: '18px',
           color: '#8b98a5',
           backgroundColor: 'rgba(11, 13, 16, 0.78)',
           padding: { x: 6, y: 3 },

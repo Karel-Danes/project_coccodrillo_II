@@ -29,17 +29,17 @@ const ACTIVE_ALPHA = 0.9;
 function labelSize(key: HoldKey): string {
   switch (key) {
     case 'jumpHeld':
-      return '22px';
+      return '26px';
     case 'attackHeld':
     case 'rangedHeld':
-      return '18px';
+      return '21px';
     case 'powerHeld':
-      return '15px';
+      return '17px';
     case 'guardHeld':
-      return '15px';
+      return '17px';
     case 'left':
     case 'right':
-      return '32px';
+      return '38px';
   }
 }
 
@@ -100,42 +100,42 @@ export class TouchControls {
 
     const height = this.scene.scale.height;
     const width = this.scene.scale.width;
-    const bottom = height - 116;
+    const bottom = height - 150;
 
     // Movement on the left.
-    this.createButton(165, bottom, 62, '◀', 'left');
-    this.createButton(315, bottom, 62, '▶', 'right');
+    this.createButton(180, bottom, 78, '◀', 'left');
+    this.createButton(360, bottom, 78, '▶', 'right');
 
     const sideRanged =
       this.options.ranged === 'side' && !this.options.showMelee;
 
     // Combat buttons on the right, leaving room for the big jump target.
     if (sideRanged) {
-      this.createButton(width - 290, bottom, 64, this.options.rangedLabel, 'rangedHeld');
+      this.createButton(width - 330, bottom, 78, this.options.rangedLabel, 'rangedHeld');
     } else if (this.options.showMelee) {
-      this.createButton(width - 290, bottom, 62, 'ATK', 'attackHeld');
+      this.createButton(width - 330, bottom, 76, 'ATK', 'attackHeld');
     }
 
     if (this.options.power) {
       const power = this.createButton(
-        width - 445,
+        width - 500,
         bottom,
-        56,
+        70,
         'POWER',
         'powerHeld',
       );
       this.powerObjects = [power.circle, power.text];
     }
 
-    const jumpX = width - 130;
-    const jumpRadius = 74;
+    const jumpX = width - 125;
+    const jumpRadius = 92;
     this.createButton(jumpX, bottom, jumpRadius, 'JUMP', 'jumpHeld');
 
     // The earned relic action sits directly above the big jump button.
-    const guardRadius = 58;
+    const guardRadius = 72;
     const guard = this.createButton(
       jumpX,
-      bottom - (jumpRadius + guardRadius),
+      bottom - (jumpRadius + guardRadius + 6),
       guardRadius,
       this.options.extraLabel,
       'guardHeld',
@@ -147,7 +147,7 @@ export class TouchControls {
     if (this.options.ranged === 'overJump') {
       const thrown = this.createButton(
         jumpX,
-        bottom - (jumpRadius + guardRadius),
+        bottom - (jumpRadius + guardRadius + 6),
         guardRadius,
         this.options.rangedLabel,
         'rangedHeld',

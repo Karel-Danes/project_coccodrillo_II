@@ -24,7 +24,7 @@ export const CHARACTERS: Record<CharacterKind, CharacterDefinition> = {
     kind: 'knight',
     name: 'KNIGHT',
     epithet: 'The Oathbound',
-    maxHp: 3,
+    maxHp: 4,
     meleeDamage: 5,
     rangedDamage: 0,
     rangedRequiresBerserk: false,
@@ -43,7 +43,7 @@ export const CHARACTERS: Record<CharacterKind, CharacterDefinition> = {
     kind: 'mage',
     name: 'MAGE',
     epithet: 'The Stormcaller',
-    maxHp: 2,
+    maxHp: 3,
     meleeDamage: 0,
     rangedDamage: 3,
     rangedRequiresBerserk: false,
@@ -53,8 +53,8 @@ export const CHARACTERS: Record<CharacterKind, CharacterDefinition> = {
     meleeName: null,
     rangedName: 'Lightning Strike',
     basicAbility: 'Lightning Strike',
-    extraAbility: 'Spell Bounce',
-    extraDetail: 'Bounce spells back at their caster.',
+    extraAbility: 'Spell Bounce + POWER',
+    extraDetail: 'Bounce spells; hold POWER to charge.',
     extraLabel: 'BOUNCE',
     accent: 0xc5a4ff,
   },
@@ -62,7 +62,7 @@ export const CHARACTERS: Record<CharacterKind, CharacterDefinition> = {
     kind: 'orcBrute',
     name: 'ORC BRUTE',
     epithet: 'The Red Maw',
-    maxHp: 6,
+    maxHp: 7,
     meleeDamage: 8,
     rangedDamage: 5,
     rangedRequiresBerserk: true,
@@ -107,7 +107,9 @@ export const RANDOM_BOSSES = ['golem', 'darkKnight', 'orcBrute'] as const;
 
 export type BossKind = (typeof RANDOM_BOSSES)[number];
 
-export function isBossKind(kind: EnemyKind): kind is BossKind {
+export function isBossKind(
+  kind: EnemyKind | null | undefined,
+): kind is BossKind {
   return (
     kind === 'golem' || kind === 'darkKnight' || kind === 'orcBrute'
   );

@@ -1006,7 +1006,10 @@ export class Simulation {
       const ward = canReflectSpells(player)
         ? getWardBounds(player)
         : null;
-      if (!overlaps(projectileBounds(moved), ward ?? playerBox)) {
+      const guardBox = blocksDamage(player)
+        ? getWardBounds(player)
+        : playerBox;
+      if (!overlaps(projectileBounds(moved), ward ?? guardBox)) {
         nextProjectiles.push(moved);
         continue;
       }
@@ -1070,10 +1073,13 @@ export class Simulation {
     // they cost health. Only zero health is fatal.
     if (player.state !== 'die') {
       let blocked = false;
+      const defensiveBox = blocksDamage(player)
+        ? getWardBounds(player)
+        : playerBox;
 
       for (const enemy of this.enemies) {
         const hitbox = getEnemyAttackHitbox(enemy);
-        if (hitbox !== null && overlaps(hitbox, playerBox)) {
+        if (hitbox !== null && overlaps(hitbox, defensiveBox)) {
           if (blocksDamage(player)) {
             blocked = true;
             if (!this.blockedThisAttack) {

@@ -75,7 +75,7 @@ export function createPlayer(
     facing: 1,
     grounded: false,
     stateTime: 0,
-    hp: definition.maxHp,
+    hp: definition.startHp,
     maxHp: definition.maxHp,
     invulnerableTime: 0,
     guardUnlocked: false,

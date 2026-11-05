@@ -184,7 +184,7 @@ export class MenuScene extends Phaser.Scene {
         .text(
           x,
           454,
-          `♥ ${definition.maxHp}    MELEE ${melee}    RANGED ${ranged}`,
+          `♥ ${definition.startHp}/${definition.maxHp}  MELEE ${melee}  RANGED ${ranged}`,
           {
             fontFamily: 'monospace',
             fontSize: '18px',

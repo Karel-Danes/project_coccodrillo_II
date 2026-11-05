@@ -8,7 +8,7 @@ import {
   PLAYER_HEIGHT,
 } from './player';
 import { Simulation } from './simulation';
-import type { EnemySpawn, InputState, Level } from './types';
+import type { EnemySpawn, InputState, Level, Projectile } from './types';
 
 const NO_INPUT: InputState = {
   left: false,
@@ -29,25 +29,37 @@ function flatLevel(
 }
 
 describe('character rulebook', () => {
-  it('starts each hero with the menu heart count', () => {
-    expect(createPlayer({ x: 0, y: 0 }, 'knight').maxHp).toBe(4);
-    expect(createPlayer({ x: 0, y: 0 }, 'mage').maxHp).toBe(3);
-    expect(createPlayer({ x: 0, y: 0 }, 'orcBrute').maxHp).toBe(7);
+  it('starts each hero below full health', () => {
+    expect(createPlayer({ x: 0, y: 0 }, 'knight')).toMatchObject({
+      hp: 3,
+      maxHp: 4,
+    });
+    expect(createPlayer({ x: 0, y: 0 }, 'mage')).toMatchObject({
+      hp: 2,
+      maxHp: 3,
+    });
+    expect(createPlayer({ x: 0, y: 0 }, 'orcBrute')).toMatchObject({
+      hp: 6,
+      maxHp: 7,
+    });
   });
 
   it('publishes the exact menu numbers for every hero', () => {
     expect(CHARACTERS.knight).toMatchObject({
       maxHp: 4,
+      startHp: 3,
       meleeDamage: 5,
       rangedDamage: 0,
     });
     expect(CHARACTERS.mage).toMatchObject({
       maxHp: 3,
+      startHp: 2,
       meleeDamage: 0,
       rangedDamage: 3,
     });
     expect(CHARACTERS.orcBrute).toMatchObject({
       maxHp: 7,
+      startHp: 6,
       meleeDamage: 8,
       rangedDamage: 5,
     });
@@ -175,7 +187,7 @@ describe('character rulebook', () => {
     simulation.step();
 
     expect(simulation.state.player.maxHp).toBe(10);
-    expect(simulation.state.player.hp).toBe(10);
+    expect(simulation.state.player.hp).toBe(9);
     expect(simulation.state.player.guardUnlocked).toBe(true);
     expect(simulation.state.player.berserkPermanent).toBe(true);
 
@@ -234,6 +246,64 @@ describe('character rulebook', () => {
     expect(defeatedKind).toBe('darkKnight');
   });
 
+  it('blocks close combat while the Mage bubble is up', () => {
+    const level = flatLevel([
+      {
+        kind: 'skeleton',
+        x: 260,
+        y: 40,
+        patrolMinX: 100,
+        patrolMaxX: 320,
+      },
+    ]);
+    const simulation = new Simulation(level, { character: 'mage' });
+    simulation.state.player.guardUnlocked = true;
+    simulation.setInput({ ...NO_INPUT, guardHeld: true });
+
+    let blocked = false;
+    for (let i = 0; i < 240; i += 1) {
+      const events = simulation.step();
+      if (events.some((event) => event.type === 'attackBlocked')) {
+        blocked = true;
+      }
+    }
+
+    expect(blocked).toBe(true);
+    expect(simulation.state.player.hp).toBe(2);
+    expect(simulation.state.status).toBe('playing');
+  });
+
+  it('blocks an axe that only clips the edge of the Mage bubble', () => {
+    const simulation = new Simulation(flatLevel(), { character: 'mage' });
+    simulation.state.player.guardUnlocked = true;
+    simulation.setInput({ ...NO_INPUT, guardHeld: true });
+    simulation.step();
+    simulation.step();
+
+    const player = simulation.state.player;
+    const axe: Projectile = {
+      position: { x: player.position.x - 80, y: 10 },
+      velocity: { x: 420, y: 0 },
+      lifetime: 3,
+      owner: 'enemy',
+      kind: 'axe',
+      damage: 2,
+      gravity: 0,
+    };
+    (simulation.state.projectiles as Projectile[]).push(axe);
+
+    let bounced = false;
+    for (let i = 0; i < 20; i += 1) {
+      const events = simulation.step();
+      if (events.some((event) => event.type === 'spellBounced')) {
+        bounced = true;
+      }
+    }
+
+    expect(bounced).toBe(true);
+    expect(simulation.state.player.hp).toBe(2);
+  });
+
   it('lets the Mage bounce a boss spell without taking damage', () => {
     const level = parseLevel(
       [
@@ -285,7 +355,7 @@ describe('character rulebook', () => {
     expect(sawReflected).toBe(true);
     const boss = simulation.state.enemies[0]!;
     expect(boss.hp).toBeLessThan(boss.maxHp);
-    expect(simulation.state.player.hp).toBe(3);
+    expect(simulation.state.player.hp).toBe(2);
     expect(simulation.state.status).toBe('playing');
   });
 });

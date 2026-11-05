@@ -44,6 +44,7 @@ describe('pickups', () => {
     const simulation = new Simulation(
       levelWith([{ kind: 'heart', x: 200, y: 40 }]),
     );
+    simulation.state.player.hp = simulation.state.player.maxHp;
 
     simulation.step();
     expect(simulation.state.player.hp).toBe(4);

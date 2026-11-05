@@ -183,7 +183,7 @@ describe('health', () => {
     const sourceX = standing.position.x + 100;
 
     const hurt = applyPlayerDamage(standing, 1, sourceX);
-    expect(hurt.hp).toBe(PLAYER_MAX_HP - 1);
+    expect(hurt.hp).toBe(standing.hp - 1);
     expect(hurt.state).toBe('hurt');
     expect(hurt.invulnerableTime).toBeCloseTo(PLAYER_INVULNERABILITY);
     expect(hurt.velocity.x).toBeLessThan(0);

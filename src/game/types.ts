@@ -52,6 +52,8 @@ export type CharacterDefinition = {
   name: string;
   epithet: string;
   maxHp: number;
+  /** Life at the start of a run; the rest must be healed. */
+  startHp: number;
   /** Damage per melee hit. Zero means the hero cannot melee. */
   meleeDamage: number;
   /** Damage per ranged hit. Zero means the hero cannot shoot. */

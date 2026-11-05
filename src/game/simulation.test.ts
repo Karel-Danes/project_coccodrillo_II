@@ -71,7 +71,7 @@ describe('Simulation', () => {
 
     expect(rescued).toBe(true);
     expect(simulation.state.status).toBe('playing');
-    expect(simulation.state.player.hp).toBe(5);
+    expect(simulation.state.player.hp).toBe(4);
     expect(simulation.state.player.state).toBe('jump');
     expect(simulation.state.player.velocity.y).toBeLessThan(0);
   });

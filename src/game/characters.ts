@@ -24,7 +24,7 @@ export const CHARACTERS: Record<CharacterKind, CharacterDefinition> = {
     kind: 'knight',
     name: 'KNIGHT',
     epithet: 'The Oathbound',
-    maxHp: 4,
+    maxHp: 5,
     startHp: 3,
     meleeDamage: 5,
     rangedDamage: 0,

@@ -47,14 +47,14 @@ describe('pickups', () => {
     simulation.state.player.hp = simulation.state.player.maxHp;
 
     simulation.step();
-    expect(simulation.state.player.hp).toBe(4);
+    expect(simulation.state.player.hp).toBe(5);
     expect(simulation.state.pickups[0]?.collected).toBe(false);
 
-    simulation.state.player.hp = 3;
+    simulation.state.player.hp = 4;
     simulation.setInput(IDLE);
     simulation.step();
 
-    expect(simulation.state.player.hp).toBe(4);
+    expect(simulation.state.player.hp).toBe(5);
     expect(simulation.state.pickups[0]?.collected).toBe(true);
   });
 
@@ -66,7 +66,7 @@ describe('pickups', () => {
 
     const events = simulation.step();
 
-    expect(simulation.state.player.hp).toBe(4);
+    expect(simulation.state.player.hp).toBe(5);
     expect(simulation.state.pickups[0]?.collected).toBe(true);
     expect(
       events.some(

@@ -22,7 +22,7 @@ export const MAX_FALL_SPEED = 1400;
 
 /** The Knight's three hearts, kept as the default for existing callers. */
 /** The Knight's maximum life, kept as the default for existing callers. */
-export const PLAYER_MAX_HP = 4;
+export const PLAYER_MAX_HP = 5;
 export const MAX_PLAYER_HP = 16;
 export const PLAYER_HURT_DURATION = 0.35;
 export const PLAYER_INVULNERABILITY = 1.1;

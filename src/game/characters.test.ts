@@ -32,7 +32,7 @@ describe('character rulebook', () => {
   it('starts each hero below full health', () => {
     expect(createPlayer({ x: 0, y: 0 }, 'knight')).toMatchObject({
       hp: 3,
-      maxHp: 4,
+      maxHp: 5,
     });
     expect(createPlayer({ x: 0, y: 0 }, 'mage')).toMatchObject({
       hp: 2,
@@ -46,7 +46,7 @@ describe('character rulebook', () => {
 
   it('publishes the exact menu numbers for every hero', () => {
     expect(CHARACTERS.knight).toMatchObject({
-      maxHp: 4,
+      maxHp: 5,
       startHp: 3,
       meleeDamage: 5,
       rangedDamage: 0,

@@ -11,20 +11,21 @@ const ACTIVE_ALPHA = 0.9;
 function labelSize(key: HoldKey): string {
   switch (key) {
     case 'jumpHeld':
-      return '21px';
+      return '22px';
     case 'attackHeld':
-      return '18px';
+      return '19px';
     case 'guardHeld':
-      return '15px';
+      return '16px';
     case 'left':
     case 'right':
-      return '30px';
+      return '32px';
   }
 }
 
 /**
  * On-screen hold buttons for touch devices. Each button tracks its own
  * pointer ids, so walking and jumping can be held with separate fingers.
+ * The guard button is hidden until the shield artefact is collected.
  */
 export class TouchControls {
   readonly input: InputState = {
@@ -39,6 +40,11 @@ export class TouchControls {
     Phaser.GameObjects.Shape | Phaser.GameObjects.Text
   > = [];
   private readonly cleanups: Array<() => void> = [];
+  private guardObjects: Array<
+    Phaser.GameObjects.Shape | Phaser.GameObjects.Text
+  > = [];
+  private guardCircle: Phaser.GameObjects.Arc | null = null;
+  private guardUnlocked = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -51,15 +57,30 @@ export class TouchControls {
 
     const height = this.scene.scale.height;
     const width = this.scene.scale.width;
-    // Larger touch targets, raised a little off the bottom edge.
-    const bottom = height - 98;
+    // Raised a little more and slightly larger than the previous pass.
+    const bottom = height - 116;
 
-    // Movement on the left, combat and jump on the right.
-    this.createButton(165, bottom, 58, '◀', 'left');
-    this.createButton(315, bottom, 58, '▶', 'right');
-    this.createButton(width - 420, bottom, 54, 'GUARD', 'guardHeld');
-    this.createButton(width - 285, bottom, 58, 'ATK', 'attackHeld');
-    this.createButton(width - 130, bottom, 68, 'JUMP', 'jumpHeld');
+    // Movement on the left; combat and jump on the right.
+    this.createButton(165, bottom, 62, '◀', 'left');
+    this.createButton(315, bottom, 62, '▶', 'right');
+    this.createButton(width - 285, bottom, 62, 'ATK', 'attackHeld');
+
+    const jumpX = width - 130;
+    const jumpRadius = 74;
+    this.createButton(jumpX, bottom, jumpRadius, 'JUMP', 'jumpHeld');
+
+    // Guard sits directly above the big jump button.
+    const guardRadius = 58;
+    const guard = this.createButton(
+      jumpX,
+      bottom - (jumpRadius + guardRadius),
+      guardRadius,
+      'GUARD',
+      'guardHeld',
+    );
+    this.guardObjects = [guard.circle, guard.text];
+    this.guardCircle = guard.circle;
+    this.setGuardVisible(false);
   }
 
   destroy(): void {
@@ -71,12 +92,65 @@ export class TouchControls {
     }
     this.cleanups.length = 0;
     this.objects.length = 0;
+    this.guardObjects = [];
+    this.guardCircle = null;
   }
 
   setVisible(visible: boolean): void {
     for (const object of this.objects) {
       object.setVisible(visible);
     }
+
+    if (!visible) {
+      this.clearInput();
+      return;
+    }
+
+    if (!this.guardUnlocked) {
+      for (const object of this.guardObjects) {
+        object.setVisible(false);
+      }
+    }
+  }
+
+  /** Called when the shield artefact is picked up. */
+  setGuardVisible(visible: boolean): void {
+    const wasVisible = this.guardUnlocked;
+    this.guardUnlocked = visible;
+
+    if (!visible) {
+      this.input.guardHeld = false;
+      this.guardCircle?.setFillStyle(IDLE_FILL, FILL_ALPHA);
+      for (const object of this.guardObjects) {
+        object.setVisible(false);
+      }
+      return;
+    }
+
+    for (const object of this.guardObjects) {
+      object.setVisible(true);
+    }
+
+    if (!wasVisible) {
+      for (const object of this.guardObjects) {
+        object.setScale(0.65).setAlpha(0);
+      }
+      this.scene.tweens.add({
+        targets: this.guardObjects,
+        scale: 1,
+        alpha: 1,
+        duration: 260,
+        ease: 'Back.Out',
+      });
+    }
+  }
+
+  private clearInput(): void {
+    this.input.left = false;
+    this.input.right = false;
+    this.input.jumpHeld = false;
+    this.input.attackHeld = false;
+    this.input.guardHeld = false;
   }
 
   private createButton(
@@ -85,7 +159,10 @@ export class TouchControls {
     radius: number,
     label: string,
     key: HoldKey,
-  ): void {
+  ): {
+    circle: Phaser.GameObjects.Arc;
+    text: Phaser.GameObjects.Text;
+  } {
     const circle = this.scene.add
       .circle(x, y, radius, IDLE_FILL, FILL_ALPHA)
       .setStrokeStyle(2, 0x6a7785, 0.9)
@@ -132,5 +209,7 @@ export class TouchControls {
       circle.off('pointerup', release);
       circle.off('pointerout', release);
     });
+
+    return { circle, text };
   }
 }

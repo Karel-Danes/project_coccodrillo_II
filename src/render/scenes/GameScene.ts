@@ -186,6 +186,10 @@ export class GameScene extends Phaser.Scene {
     this.startLevel = resolveStartLevel();
     this.simulation = new Simulation(this.startLevel);
 
+    if (new URLSearchParams(window.location.search).has('guard')) {
+      this.simulation.state.player.guardUnlocked = true;
+    }
+
     const level = this.simulation.level;
     const worldWidth = level.cols * level.tileSize;
     const worldHeight = level.rows * level.tileSize;
@@ -502,6 +506,9 @@ export class GameScene extends Phaser.Scene {
       this.keyboardHint.setVisible(false);
       this.touchControls = new TouchControls(this, this.hudLayer);
       this.touchControls.create();
+      this.touchControls.setGuardVisible(
+        this.simulation.state.player.guardUnlocked,
+      );
       this.createZoomControls(viewWidth);
     }
 
@@ -611,6 +618,7 @@ export class GameScene extends Phaser.Scene {
     } else if (kind === 'artifact') {
       this.sfx.heal();
       this.showBanner('GUARD UNLOCKED');
+      this.touchControls?.setGuardVisible(true);
     } else {
       this.sfx.heal();
     }
@@ -939,6 +947,9 @@ export class GameScene extends Phaser.Scene {
     this.hudLayer.setVisible(true);
     this.cameras.main.startFollow(this.cameraFocus, true, 0.14, 0.14);
     this.centerCameraOnPlayer();
+    this.touchControls?.setGuardVisible(
+      this.simulation.state.player.guardUnlocked,
+    );
     this.render();
   }
 
@@ -952,7 +963,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createZoomControls(viewWidth: number): void {
-    const y = 48;
+    const y = 40;
     const minusX = viewWidth - 160;
     const plusX = viewWidth - 40;
     const labelX = viewWidth - 100;
@@ -960,7 +971,7 @@ export class GameScene extends Phaser.Scene {
     const create = (x: number, label: string, delta: number): void => {
       const circle = this.addHud(
         this.add
-          .circle(x, y, 24, 0x10161d, 0.55)
+          .circle(x, y, 28, 0x10161d, 0.55)
           .setStrokeStyle(2, 0x6a7785, 0.9)
           .setScrollFactor(0)
           .setDepth(23)
@@ -970,7 +981,7 @@ export class GameScene extends Phaser.Scene {
         this.add
           .text(x, y, label, {
             fontFamily: 'monospace',
-            fontSize: '26px',
+            fontSize: '28px',
             color: '#d7dde3',
           })
           .setOrigin(0.5)
@@ -987,7 +998,7 @@ export class GameScene extends Phaser.Scene {
       this.add
         .text(labelX, 82, '', {
           fontFamily: 'monospace',
-          fontSize: '16px',
+          fontSize: '17px',
           color: '#8b98a5',
           backgroundColor: 'rgba(11, 13, 16, 0.78)',
           padding: { x: 6, y: 3 },

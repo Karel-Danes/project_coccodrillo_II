@@ -38,7 +38,7 @@ describe('teleport doors', () => {
     expect(simulation.state.player.position.x).toBeCloseTo(480);
   });
 
-  it('lets enemies use the same doors', () => {
+  it('does not let enemies use the doors', () => {
     const level: Level = {
       ...flatLevel(),
       spawn: { x: 900, y: 40 },
@@ -61,8 +61,8 @@ describe('teleport doors', () => {
     simulation.step();
 
     const enemy = simulation.state.enemies[0]!;
-    expect(enemy.position.x).toBeCloseTo(544);
-    expect(enemy.position.y).toBeCloseTo(512);
+    expect(enemy.position.x).toBeLessThan(200);
+    expect(enemy.position.y).toBeLessThan(200);
   });
 
   it('grants permanent sigil bonuses from the sky room', () => {

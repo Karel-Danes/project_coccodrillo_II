@@ -216,7 +216,6 @@ export function createEnemy(
     ranged: spawn.ranged === true,
     rangedCooldown: tuning.rangedCooldown * 0.5,
     rangedDamage: tuning.rangedDamage,
-    portalLocked: false,
   };
 }
 

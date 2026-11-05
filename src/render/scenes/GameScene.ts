@@ -8,6 +8,7 @@ import {
   isCharacterKind,
   isWorldMode,
 } from '../../game/characters';
+import { CAMPAIGN_LEVEL } from '../../game/campaign';
 import {
   DEFAULT_DIFFICULTY,
   difficultyDefinition,
@@ -19,7 +20,6 @@ import {
   statsFor,
 } from '../../game/enemy';
 import { tileAt } from '../../game/level';
-import { LEVEL_01 } from '../../game/levels';
 import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
 import {
   getAttackPhase,
@@ -190,22 +190,22 @@ function queryConfig(data?: Partial<GameConfig>): GameConfig {
 
 function resolveCampaignLevel(): Level {
   if (typeof window === 'undefined') {
-    return LEVEL_01;
+    return CAMPAIGN_LEVEL;
   }
 
   const params = new URLSearchParams(window.location.search);
   const boss = params.has('boss');
 
   if (boss) {
-    return { ...LEVEL_01, spawn: { x: 5240, y: 936 } };
+    return { ...CAMPAIGN_LEVEL, spawn: { x: 5240, y: 936 } };
   }
 
   const spawnX = Number(params.get('spawnX'));
   if (Number.isFinite(spawnX) && spawnX > 0) {
-    return { ...LEVEL_01, spawn: { x: spawnX, y: 936 } };
+    return { ...CAMPAIGN_LEVEL, spawn: { x: spawnX, y: 936 } };
   }
 
-  return LEVEL_01;
+  return CAMPAIGN_LEVEL;
 }
 
 function resolveLevel(config: GameConfig): Level {
@@ -243,12 +243,12 @@ function resolveLevel(config: GameConfig): Level {
 export class GameScene extends Phaser.Scene {
   private readonly loop = new FixedStepLoop(FIXED_TIMESTEP_MS);
   private config: GameConfig = { ...DEFAULT_CONFIG };
-  private simulation = new Simulation(LEVEL_01, {
+  private simulation = new Simulation(CAMPAIGN_LEVEL, {
     character: 'knight',
     worldMode: 'campaign',
     difficulty: DEFAULT_DIFFICULTY,
   });
-  private startLevel: Level = LEVEL_01;
+  private startLevel: Level = CAMPAIGN_LEVEL;
   private tick = 0;
 
   private playerSprite!: Phaser.GameObjects.Sprite;

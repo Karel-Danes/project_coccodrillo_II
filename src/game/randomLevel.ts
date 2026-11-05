@@ -477,18 +477,6 @@ export function generateRandomLevel(
     { id: 1, targetId: 0, x: skyDoorX, y: roomFloorY },
   ];
 
-  // A door guard patrols the ground portal and, in practice, often rides it
-  // into the sky room. Any other enemy that wanders into a door follows.
-  const guardStats = statsFor('skeleton');
-  enemies.push({
-    kind: 'skeleton',
-    x: groundDoorX - guardStats.width / 2,
-    y: groundY - guardStats.height,
-    patrolMinX: groundDoorX - 110,
-    patrolMaxX: groundDoorX + 110,
-    ranged: tuning.rangedChance > 0 && rng() < 0.5,
-  });
-
   const rows = grid.map((row) => row.join(''));
   const level = parseLevel(rows, {
     tileSize: TILE_SIZE,

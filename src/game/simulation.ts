@@ -16,7 +16,6 @@ import {
   statsFor,
   stepEnemy,
 } from './enemy';
-import { tileAt } from './level';
 import { FIXED_DT_SECONDS } from './loop';
 import { moveAndCollide, overlaps } from './physics';
 import { pickupBounds } from './pickup';
@@ -459,66 +458,6 @@ export class Simulation {
     };
   }
 
-  private resolveEnemyTeleports(): boolean {
-    let used = false;
-
-    this.enemies = this.enemies.map((enemy) => {
-      if (enemy.state === 'die') {
-        return enemy;
-      }
-
-      const here = this.portalFor(enemyBounds(enemy));
-      if (enemy.portalLocked) {
-        return here ? enemy : { ...enemy, portalLocked: false };
-      }
-
-      if (!here || enemy.state === 'hurt') {
-        return enemy;
-      }
-
-      const destination = this.teleports.find(
-        (portal) => portal.id === here.targetId,
-      );
-      if (!destination) {
-        return enemy;
-      }
-
-      const stats = statsFor(enemy.kind);
-      const floorRow = Math.floor(destination.y / this.level.tileSize);
-      const landingX = destination.x - stats.width / 2 + 64;
-      const col = Math.floor(landingX / this.level.tileSize);
-      let left = col;
-      let right = col;
-      while (tileAt(this.level, left - 1, floorRow) === 'solid') {
-        left -= 1;
-      }
-      while (tileAt(this.level, right + 1, floorRow) === 'solid') {
-        right += 1;
-      }
-
-      used = true;
-      return {
-        ...enemy,
-        position: {
-          x: landingX,
-          y: destination.y - stats.height,
-        },
-        velocity: { x: 0, y: 0 },
-        homeX: landingX,
-        homeY: destination.y - stats.height,
-        grounded: stats.behavior !== 'flying',
-        state: 'idle' as const,
-        stateTime: 0,
-        portalLocked: true,
-        patrolMinX: left * this.level.tileSize + 8,
-        patrolMaxX:
-          (right + 1) * this.level.tileSize - stats.width - 8,
-      };
-    });
-
-    return used;
-  }
-
   private rangedTargetFor(player: Player): Vec2 | undefined {
     if (player.character !== 'mage') {
       return undefined;
@@ -756,10 +695,6 @@ export class Simulation {
         dtSeconds: FIXED_DT_SECONDS,
       }),
     );
-
-    if (this.resolveEnemyTeleports()) {
-      events.push({ type: 'teleported', by: 'enemy' });
-    }
 
     // Boss intro: freeze everything and hand control to the cutscene.
     if (!this.bossIntroShown) {

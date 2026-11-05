@@ -109,8 +109,6 @@ export type Enemy = {
   ranged: boolean;
   rangedCooldown: number;
   rangedDamage: number;
-  /** Prevents a freshly teleported enemy from bouncing straight back. */
-  portalLocked: boolean;
 };
 
 export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact' | 'skill';

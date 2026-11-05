@@ -41,6 +41,8 @@ export type EnemyStats = {
   attackOffsetY: number;
   /** Health lost by the player when this enemy's swing connects. */
   damage: number;
+  /** Jan Zátka's hand can smash through the Mage's bounce bubble. */
+  piercesMageBounce?: boolean;
 };
 
 export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
@@ -133,6 +135,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     attackHeight: 80,
     attackOffsetY: 28,
     damage: 2,
+    piercesMageBounce: true,
   },
   darkKnight: {
     behavior: 'ground',

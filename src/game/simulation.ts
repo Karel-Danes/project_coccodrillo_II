@@ -1075,13 +1075,17 @@ export class Simulation {
       for (const enemy of this.enemies) {
         const hitbox = getEnemyAttackHitbox(enemy);
         if (hitbox !== null && overlaps(hitbox, defensiveBox)) {
-          if (blocksDamage(player)) {
+          const stats = statsFor(enemy.kind);
+          const piercesBounce =
+            stats.piercesMageBounce === true &&
+            canReflectSpells(player);
+
+          if (blocksDamage(player) && !piercesBounce) {
             blocked = true;
             if (!this.blockedThisAttack) {
               events.push({ type: 'attackBlocked' });
             }
           } else if (player.invulnerableTime <= 0) {
-            const stats = statsFor(enemy.kind);
             const damage = Math.max(
               1,
               Math.round(

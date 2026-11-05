@@ -174,6 +174,47 @@ describe('golem boss', () => {
     expect(boss.position.x).toBeLessThan(startX - 40);
   });
 
+  it('lets Jan Zátka’s hand hit a guarding Mage', () => {
+    const level = parseLevel(
+      [
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '.'.repeat(20),
+        '#'.repeat(20),
+      ],
+      {
+        tileSize: 64,
+        spawn: { x: 200, y: 168 },
+        enemies: [
+          {
+            kind: 'golem',
+            x: 300,
+            y: 120,
+            patrolMinX: 280,
+            patrolMaxX: 330,
+            boss: true,
+          },
+        ],
+      },
+    );
+    const simulation = new Simulation(level, { character: 'mage' });
+    simulation.step();
+    simulation.resumeFromCutscene();
+    simulation.state.player.guardUnlocked = true;
+    simulation.setInput({ ...NO_INPUT, guardHeld: true });
+
+    const hpBefore = simulation.state.player.hp;
+    for (let i = 0; i < 180 && simulation.state.mode === 'play'; i += 1) {
+      simulation.step();
+      if (simulation.state.player.hp < hpBefore) {
+        break;
+      }
+    }
+
+    expect(simulation.state.player.hp).toBeLessThan(hpBefore);
+  });
+
   it('lets an unlocked guard block golem orbs', () => {
     const simulation = new Simulation(rangedArenaLevel());
     simulation.step();

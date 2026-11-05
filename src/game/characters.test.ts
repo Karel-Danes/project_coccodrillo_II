@@ -186,8 +186,8 @@ describe('character rulebook', () => {
     const simulation = new Simulation(level, { character: 'orcBrute' });
     simulation.step();
 
-    expect(simulation.state.player.maxHp).toBe(10);
-    expect(simulation.state.player.hp).toBe(9);
+    expect(simulation.state.player.maxHp).toBe(7);
+    expect(simulation.state.player.hp).toBe(7);
     expect(simulation.state.player.guardUnlocked).toBe(true);
     expect(simulation.state.player.berserkPermanent).toBe(true);
 

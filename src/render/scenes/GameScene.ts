@@ -25,7 +25,7 @@ import { FIXED_TIMESTEP_MS, FixedStepLoop } from '../../game/loop';
 import {
   getAttackPhase,
   isBerserk,
-  MAX_PLAYER_HP,
+  MAX_HUD_HEARTS,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -701,8 +701,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.heartHud = [];
-    // The hard life cap and the number of HUD heart slots are the same.
-    for (let i = 0; i < MAX_PLAYER_HP; i += 1) {
+    // Physical HUD slots; hearts above the character's cap stay hidden.
+    for (let i = 0; i < MAX_HUD_HEARTS; i += 1) {
       this.heartHud.push(
         this.addHud(
           this.add

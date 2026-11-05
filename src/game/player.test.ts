@@ -11,7 +11,6 @@ import {
   grantExtraLife,
   healPlayer,
   JUMP_SPEED,
-  MAX_PLAYER_HP,
   PLAYER_INVULNERABILITY,
   PLAYER_MAX_HP,
   PLAYER_WIDTH,
@@ -220,25 +219,34 @@ describe('health', () => {
     expect(dead.state).toBe('die');
   });
 
-  it('never lets extra-life gains exceed the hard life cap', () => {
+  it('never lets extra-life gains exceed the character cap', () => {
     const level = flatLevel();
     const standing = settle(level);
     const nearCap = {
       ...standing,
-      maxHp: MAX_PLAYER_HP - 1,
-      hp: MAX_PLAYER_HP - 2,
+      maxHp: PLAYER_MAX_HP - 1,
+      hp: PLAYER_MAX_HP - 2,
     };
 
     const capped = grantExtraLife(nearCap, 5);
-    expect(capped.maxHp).toBe(MAX_PLAYER_HP);
-    expect(capped.hp).toBeLessThanOrEqual(MAX_PLAYER_HP);
+    expect(capped.maxHp).toBe(PLAYER_MAX_HP);
+    expect(capped.hp).toBeLessThanOrEqual(PLAYER_MAX_HP);
 
     const atCap = grantExtraLife(
-      { ...nearCap, maxHp: MAX_PLAYER_HP, hp: MAX_PLAYER_HP },
+      { ...nearCap, maxHp: PLAYER_MAX_HP, hp: PLAYER_MAX_HP },
       2,
     );
-    expect(atCap.maxHp).toBe(MAX_PLAYER_HP);
-    expect(atCap.hp).toBe(MAX_PLAYER_HP);
+    expect(atCap.maxHp).toBe(PLAYER_MAX_HP);
+    expect(atCap.hp).toBe(PLAYER_MAX_HP);
+
+    const mageWithOldProgress = {
+      ...createPlayer({ x: 0, y: 0 }, 'mage'),
+      maxHp: 7,
+      hp: 6,
+    };
+    const cappedMage = grantExtraLife(mageWithOldProgress, 3);
+    expect(cappedMage.maxHp).toBe(3);
+    expect(cappedMage.hp).toBe(3);
   });
 });
 

@@ -264,11 +264,30 @@ describe('Simulation', () => {
     const state = simulation.state;
     expect(state.coins).toBe(7);
     expect(state.player.hp).toBe(4);
-    expect(state.player.maxHp).toBe(6);
+    expect(state.player.maxHp).toBe(5);
     expect(state.player.bonusMelee).toBe(4);
     expect(state.player.bonusRanged).toBe(2);
     expect(state.player.jumpBonus).toBe(90);
     expect(state.player.guardUnlocked).toBe(true);
     expect(state.player.berserkPermanent).toBe(true);
+  });
+
+  it('clamps carried progress to the next character hard cap', () => {
+    const simulation = new Simulation(flatLevel(), {
+      character: 'mage',
+    });
+    simulation.applyProgress({
+      hp: 7,
+      maxHp: 7,
+      bonusMelee: 0,
+      bonusRanged: 4,
+      jumpBonus: 90,
+      guardUnlocked: true,
+      berserkPermanent: false,
+      coins: 2,
+    });
+
+    expect(simulation.state.player.maxHp).toBe(3);
+    expect(simulation.state.player.hp).toBe(3);
   });
 });

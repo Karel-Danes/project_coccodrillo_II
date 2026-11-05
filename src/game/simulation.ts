@@ -2,6 +2,7 @@ import {
   DEFAULT_CHARACTER,
   DEFAULT_WORLD_MODE,
   isBossKind,
+  characterDefinition,
 } from './characters';
 import {
   DEFAULT_DIFFICULTY,
@@ -41,7 +42,6 @@ import {
   hasFallenOutOfWorld,
   healPlayer,
   JUMP_SPEED,
-  MAX_PLAYER_HP,
   MAX_POWER_CHARGE,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -275,9 +275,12 @@ export class Simulation {
 
   /** Carries unlocked abilities and stats into the next random level. */
   applyProgress(progress: PlayerProgress): void {
+    const characterMaxHp = characterDefinition(
+      this.player.character,
+    ).maxHp;
     const maxHp = Math.max(
       1,
-      Math.min(MAX_PLAYER_HP, progress.maxHp),
+      Math.min(characterMaxHp, progress.maxHp),
     );
     const hp = Math.max(1, Math.min(maxHp, progress.hp));
     this.coins = Math.max(0, progress.coins);

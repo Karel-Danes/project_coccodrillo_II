@@ -78,18 +78,21 @@ describe('teleport doors', () => {
     expect(simulation.state.player.bonusMelee).toBe(2);
   });
 
-  it('vitality sigils raise the life cap', () => {
+  it('vitality sigils heal but never raise life above the character cap', () => {
     const level: Level = {
       ...flatLevel(),
       pickups: [
         { kind: 'skill', skill: 'vitality', x: 120, y: 84 },
       ],
     };
-    const simulation = new Simulation(level);
+    const simulation = new Simulation(level, { character: 'mage' });
     const maxHp = simulation.state.player.maxHp;
+    simulation.state.player.hp = 1;
     simulation.step();
 
-    expect(simulation.state.player.maxHp).toBe(maxHp + 2);
+    expect(maxHp).toBe(3);
+    expect(simulation.state.player.maxHp).toBe(3);
+    expect(simulation.state.player.hp).toBe(3);
   });
 
   it('wind sigils grant a higher jump', () => {

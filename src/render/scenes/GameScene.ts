@@ -36,6 +36,7 @@ import type {
   Enemy,
   EnemyKind,
   EnemyState,
+  FloatingIsland,
   GameConfig,
   Level,
   Pickup,
@@ -267,6 +268,7 @@ export class GameScene extends Phaser.Scene {
   private bossName!: Phaser.GameObjects.Text;
 
   private pickupViews: PickupView[] = [];
+  private islandViews: Phaser.GameObjects.Graphics[] = [];
   private heartHud: Phaser.GameObjects.Image[] = [];
   private coinText!: Phaser.GameObjects.Text;
   private guardBadge!: Phaser.GameObjects.Image;
@@ -339,6 +341,7 @@ export class GameScene extends Phaser.Scene {
     // The scene may be restarted for a fresh random world; clear old views.
     this.enemyViews = [];
     this.pickupViews = [];
+    this.islandViews = [];
     this.projectileViews = [];
     this.heartHud = [];
     this.bannerText = null;
@@ -411,6 +414,9 @@ export class GameScene extends Phaser.Scene {
     this.backdrop = createBackdrop(this, viewWidth, viewHeight, groundY);
     createTerrainTexture(this, level);
     createDecorations(this, level);
+    this.islandViews = this.simulation.state.islands.map(() =>
+      this.add.graphics().setDepth(4),
+    );
     this.drawSpikes(level);
 
     // A cool moon over the desert night.
@@ -1494,11 +1500,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private render(): void {
-    const { player, enemies, pickups, projectiles, mode, bossKind } =
+    const { player, enemies, pickups, projectiles, islands, mode, bossKind } =
       this.simulation.state;
 
     this.renderPlayer(player);
     this.renderEnemies(enemies);
+    this.renderIslands(islands);
     this.renderPickups(pickups);
     this.renderProjectiles(projectiles);
     if (!this.endingActive) {
@@ -1557,6 +1564,70 @@ export class GameScene extends Phaser.Scene {
     if (animation !== this.currentAnimation) {
       this.playerSprite.play(animation, true);
       this.currentAnimation = animation;
+    }
+  }
+
+  private renderIslands(islands: readonly FloatingIsland[]): void {
+    islands.forEach((island, index) => {
+      let view = this.islandViews[index];
+      if (!view) {
+        view = this.add.graphics().setDepth(4);
+        this.islandViews[index] = view;
+      }
+
+      view.clear();
+      view.setPosition(island.x, island.y);
+
+      // Stone underside and mossy top.
+      view
+        .fillStyle(0x1d2533, 0.98)
+        .fillRoundedRect(0, 0, island.width, 24, 7);
+      view
+        .fillStyle(0x3a475c, 1)
+        .fillRect(0, 5, island.width, 13);
+      view
+        .fillStyle(0x53657e, 1)
+        .fillRect(0, 5, island.width, 4);
+      view
+        .fillStyle(0x4f7a5d, 1)
+        .fillRect(0, 0, island.width, 5);
+      view
+        .fillStyle(0x7fae7a, 0.9)
+        .fillRect(0, 0, island.width, 2);
+
+      // A few hanging rock teeth make the island read as a floating chunk.
+      const teeth = Math.max(2, Math.floor(island.width / 44));
+      for (let tooth = 0; tooth < teeth; tooth += 1) {
+        const tx =
+          10 +
+          (tooth * (island.width - 20)) / Math.max(1, teeth - 1);
+        view
+          .fillStyle(0x18202c, 0.95)
+          .fillTriangle(tx - 9, 23, tx + 9, 23, tx, 34);
+      }
+
+      // Gold taxi runes.
+      const cx = island.width / 2;
+      view
+        .lineStyle(2, 0xd8b46a, 0.55)
+        .lineBetween(cx - 14, 12, cx + 14, 12);
+      view
+        .fillStyle(0xe8c77a, 0.85)
+        .fillTriangle(cx - 22, 12, cx - 14, 8, cx - 14, 16)
+        .fillTriangle(cx + 22, 12, cx + 14, 8, cx + 14, 16);
+
+      // A faint glow beneath distinguishes a rideable island from scenery.
+      view
+        .fillStyle(0x8fd0ff, 0.08)
+        .fillEllipse(cx, 30, island.width * 0.8, 18);
+    });
+
+    for (
+      let index = islands.length;
+      index < this.islandViews.length;
+      index += 1
+    ) {
+      this.islandViews[index]?.setVisible(false);
     }
   }
 

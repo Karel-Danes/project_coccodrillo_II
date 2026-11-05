@@ -12,6 +12,7 @@ import type {
   Difficulty,
   EnemyKind,
   EnemySpawn,
+  FloatingIslandSpawn,
   Level,
   PickupSpawn,
 } from './types';
@@ -72,18 +73,18 @@ export function generateRandomLevel(
     grid[row]![COLS - 1] = '#';
   }
 
-  // Narrow pits. Two tiles is the widest that a running jump clears.
+  // Narrow pits. One tile keeps every hole a comfortable running jump.
   const pits: Array<{ col: number; width: number }> = [];
   let pitCursor = 12 + Math.floor(rng() * 4);
   while (pitCursor < 64) {
-    const width = rng() < 0.5 ? 2 : 1;
+    const width = 1;
     pits.push({ col: pitCursor, width });
     for (let offset = 0; offset < width; offset += 1) {
       const col = pitCursor + offset;
       grid[GROUND_ROW]![col] = '.';
       grid[GROUND_ROW + 1]![col] = '^';
     }
-    pitCursor += width + 5 + Math.floor(rng() * 4);
+    pitCursor += width + 6 + Math.floor(rng() * 5);
   }
 
   const overlapsPit = (col: number, width: number): boolean =>
@@ -218,6 +219,112 @@ export function generateRandomLevel(
     variant: 2,
   });
 
+  // Floating taxi islands. Their tops sit one jump above the floor and they
+  // drift horizontally, carrying anyone standing on them. Candidate lanes
+  // are rejected if the island body would pass through a solid ledge.
+  const islands: FloatingIslandSpawn[] = [];
+  const islandCount = 9 + Math.floor(rng() * 3);
+  const islandMinX = 4 * TILE_SIZE;
+  const islandMaxX = 78 * TILE_SIZE;
+  const islandSlot = (islandMaxX - islandMinX) / islandCount;
+
+  const islandLaneClear = (
+    baseX: number,
+    travel: number,
+    width: number,
+    y: number,
+  ): boolean => {
+    const leftCol = Math.floor((baseX - travel) / TILE_SIZE) - 1;
+    const rightCol =
+      Math.floor((baseX + travel + width) / TILE_SIZE) + 1;
+    const topRow = Math.floor(y / TILE_SIZE);
+    const bottomRow = Math.floor((y + 36) / TILE_SIZE);
+
+    for (let row = topRow; row <= bottomRow; row += 1) {
+      for (let col = leftCol; col <= rightCol; col += 1) {
+        if (grid[row]?.[col] === '#') {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  for (let index = 0; index < islandCount; index += 1) {
+    const slotCenter = islandMinX + islandSlot * (index + 0.5);
+    let placed = false;
+
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const width = 96 + Math.floor(rng() * 3) * 32;
+      const heightOptions = [64, 64, 88, 88, 128] as const;
+      const height =
+        heightOptions[Math.floor(rng() * heightOptions.length)] ?? 64;
+      const high = height > 100;
+      const travel = high
+        ? 120 + Math.floor(rng() * 4) * 35
+        : 70 + Math.floor(rng() * 4) * 25;
+      const jitter = (rng() - 0.5) * islandSlot * 0.8;
+      let baseX = slotCenter + jitter;
+      baseX = Math.max(
+        islandMinX + travel,
+        Math.min(islandMaxX - width - travel, baseX),
+      );
+      const y = groundY - height;
+
+      if (!islandLaneClear(baseX, travel, width, y)) {
+        continue;
+      }
+
+      islands.push({
+        baseX,
+        y,
+        width,
+        travel,
+        period: 4.5 + rng() * 3.5,
+        phase: rng(),
+      });
+      placed = true;
+      break;
+    }
+
+    // Sky-lane fallback: a high island is reachable from two-storey ledges
+    // and keeps the route populated even when the low lane is blocked.
+    if (!placed) {
+      const fallbackWidth = 96;
+      const fallbackTravel = 80;
+      const fallbackY = groundY - 176;
+      for (const offset of [0, -160, 160, -320, 320]) {
+        let baseX = slotCenter + offset;
+        baseX = Math.max(
+          islandMinX + fallbackTravel,
+          Math.min(
+            islandMaxX - fallbackWidth - fallbackTravel,
+            baseX,
+          ),
+        );
+        if (
+          !islandLaneClear(
+            baseX,
+            fallbackTravel,
+            fallbackWidth,
+            fallbackY,
+          )
+        ) {
+          continue;
+        }
+        islands.push({
+          baseX,
+          y: fallbackY,
+          width: fallbackWidth,
+          travel: fallbackTravel,
+          period: 4.5 + rng() * 3.5,
+          phase: rng(),
+        });
+        break;
+      }
+    }
+  }
+
   const enemies: EnemySpawn[] = [];
   const groundKinds: EnemyKind[] = ['skeleton', 'goblin', 'slime'];
   const usedCols: number[] = [];
@@ -335,5 +442,5 @@ export function generateRandomLevel(
     pickups,
   });
 
-  return { ...level, decorations };
+  return { ...level, decorations, islands };
 }

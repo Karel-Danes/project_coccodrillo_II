@@ -60,7 +60,20 @@ describe('random world generator', () => {
       } else {
         pitRun = 0;
       }
-      expect(pitRun).toBeLessThanOrEqual(2);
+      expect(pitRun).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('generates moveable floating taxi islands', () => {
+    const level = generateRandomLevel(42);
+    const islands = level.islands ?? [];
+
+    expect(islands.length).toBeGreaterThanOrEqual(8);
+    for (const island of islands) {
+      expect(island.width).toBeGreaterThanOrEqual(96);
+      expect(island.travel).toBeGreaterThan(0);
+      expect(island.period).toBeGreaterThan(0);
+      expect(island.y).toBeLessThan(16 * level.tileSize);
     }
   });
 
@@ -103,5 +116,21 @@ describe('random world generator', () => {
     expect(nightmare.enemies.length).toBeGreaterThan(middle.enemies.length);
     expect(nightmare.enemies.filter((enemy) => enemy.ranged === true).length).toBeGreaterThan(0);
     expect(middle.enemies.filter((enemy) => enemy.ranged === true)).toHaveLength(0);
+  });
+
+  it('keeps pits narrow and sky taxis plentiful across seeds', () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const level = generateRandomLevel(seed);
+      let pitRun = 0;
+      for (let col = 0; col < level.cols; col += 1) {
+        if (tileAt(level, col, 16) === 'empty') {
+          pitRun += 1;
+        } else {
+          pitRun = 0;
+        }
+        expect(pitRun).toBeLessThanOrEqual(1);
+      }
+      expect((level.islands ?? []).length).toBeGreaterThanOrEqual(6);
+    }
   });
 });

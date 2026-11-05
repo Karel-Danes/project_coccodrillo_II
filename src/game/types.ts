@@ -134,6 +134,28 @@ export type DecorationSpawn = {
   variant: number;
 };
 
+/** A one-way floating island that slides back and forth. */
+export type FloatingIslandSpawn = {
+  /** Left edge when the phase is zero. */
+  baseX: number;
+  /** Top surface in world pixels. */
+  y: number;
+  width: number;
+  /** Peak horizontal travel from the base position, in pixels. */
+  travel: number;
+  /** Seconds for a full back-and-forth cycle. */
+  period: number;
+  /** 0-1 offset into the cycle. */
+  phase: number;
+};
+
+export type FloatingIsland = FloatingIslandSpawn & {
+  id: number;
+  x: number;
+  previousX: number;
+  velocityX: number;
+};
+
 export type Level = {
   cols: number;
   rows: number;
@@ -146,6 +168,8 @@ export type Level = {
   pickups: readonly PickupSpawn[];
   /** Non-collidable scenery for random worlds. */
   decorations?: readonly DecorationSpawn[];
+  /** Moving one-way taxi islands. */
+  islands?: readonly FloatingIslandSpawn[];
 };
 
 export type Player = {
@@ -219,6 +243,7 @@ export type GameState = {
   enemies: readonly Enemy[];
   pickups: readonly Pickup[];
   projectiles: readonly Projectile[];
+  islands: readonly FloatingIsland[];
   coins: number;
   character: CharacterKind;
   worldMode: WorldMode;

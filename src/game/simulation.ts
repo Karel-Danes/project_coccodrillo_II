@@ -17,7 +17,7 @@ import {
   stepEnemy,
 } from './enemy';
 import { FIXED_DT_SECONDS } from './loop';
-import { overlaps } from './physics';
+import { moveAndCollide, overlaps } from './physics';
 import { pickupBounds } from './pickup';
 import {
   createBossProjectile,
@@ -50,6 +50,8 @@ import type {
   Difficulty,
   Enemy,
   EnemyKind,
+  FloatingIsland,
+  FloatingIslandSpawn,
   GameMode,
   GameState,
   GameStatus,
@@ -111,6 +113,11 @@ function playerCentre(player: Player): Vec2 {
   };
 }
 
+function islandX(island: FloatingIslandSpawn, phase: number): number {
+  const wave = 0.5 - 0.5 * Math.cos(phase * Math.PI * 2);
+  return island.baseX + island.travel * wave;
+}
+
 /**
  * Owns the mutable game state and advances it one fixed step at a time.
  * Pure TypeScript: the render scene feeds input and reads `state`.
@@ -120,6 +127,9 @@ export class Simulation {
   private enemies: Enemy[];
   private pickups: Pickup[];
   private projectiles: Projectile[] = [];
+  private islands: FloatingIsland[];
+  private islandClock = 0;
+  private playerIslandId: number | null = null;
   private coins = 0;
   private status: GameStatus = 'playing';
   private mode: GameMode = 'play';
@@ -172,6 +182,17 @@ export class Simulation {
       position: { x: spawn.x, y: spawn.y },
       collected: false,
     }));
+
+    this.islands = (level.islands ?? []).map((spawn, id) => {
+      const x = islandX(spawn, spawn.phase);
+      return {
+        ...spawn,
+        id,
+        x,
+        previousX: x,
+        velocityX: 0,
+      };
+    });
   }
 
   get state(): GameState {
@@ -183,6 +204,7 @@ export class Simulation {
       enemies: this.enemies,
       pickups: this.pickups,
       projectiles: this.projectiles,
+      islands: this.islands,
       coins: this.coins,
       character: this.character,
       worldMode: this.worldMode,
@@ -240,6 +262,126 @@ export class Simulation {
     };
   }
 
+  private updateIslands(): void {
+    this.islandClock += FIXED_DT_SECONDS;
+    for (const island of this.islands) {
+      island.previousX = island.x;
+      const phase = island.phase + this.islandClock / island.period;
+      island.x = islandX(island, phase);
+      island.velocityX =
+        (island.x - island.previousX) / FIXED_DT_SECONDS;
+    }
+  }
+
+  /**
+   * One-way floating islands: land from above, ride their horizontal drift,
+   * and jump up through them from below.
+   */
+  private resolveIslands(
+    player: Player,
+    previousPlayer: Player,
+  ): Player {
+    this.updateIslands();
+
+    let x = player.position.x;
+    let y = player.position.y;
+    let vy = player.velocity.y;
+    let grounded = player.grounded;
+    let state = player.state;
+
+    const riding =
+      this.playerIslandId === null
+        ? undefined
+        : this.islands.find(
+            (island) => island.id === this.playerIslandId,
+          );
+
+    if (riding && vy >= 0) {
+      const carry = riding.x - riding.previousX;
+      if (carry !== 0) {
+        const moved = moveAndCollide(
+          {
+            position: { x, y },
+            width: PLAYER_WIDTH,
+            height: PLAYER_HEIGHT,
+          },
+          { x: carry, y: 0 },
+          this.level,
+          1,
+        );
+        x = moved.position.x;
+      }
+    }
+
+    if (vy < 0) {
+      this.playerIslandId = null;
+    }
+
+    const feet = y + PLAYER_HEIGHT;
+    const previousFeet = previousPlayer.position.y + PLAYER_HEIGHT;
+
+    if (this.playerIslandId !== null) {
+      const island = this.islands.find(
+        (item) => item.id === this.playerIslandId,
+      );
+      const over =
+        island !== undefined &&
+        x + PLAYER_WIDTH > island.x + 2 &&
+        x < island.x + island.width - 2;
+      const nearTop =
+        island !== undefined &&
+        feet >= island.y - 6 &&
+        feet <= island.y + 14;
+
+      if (island && over && nearTop && vy >= 0) {
+        y = island.y - PLAYER_HEIGHT;
+        vy = 0;
+        grounded = true;
+        if (state === 'jump' || state === 'fall') {
+          state = Math.abs(player.velocity.x) > 1 ? 'walk' : 'idle';
+        }
+      } else {
+        this.playerIslandId = null;
+      }
+    }
+
+    if (this.playerIslandId === null && vy >= 0) {
+      for (const island of this.islands) {
+        const over =
+          x + PLAYER_WIDTH > island.x + 2 &&
+          x < island.x + island.width - 2;
+        if (!over) {
+          continue;
+        }
+
+        const top = island.y;
+        const crossed = previousFeet <= top + 4 && feet >= top;
+        const close =
+          feet >= top - 4 && feet <= top + 16;
+        if (!crossed && !close) {
+          continue;
+        }
+
+        y = top - PLAYER_HEIGHT;
+        vy = 0;
+        grounded = true;
+        this.playerIslandId = island.id;
+        if (state === 'jump' || state === 'fall') {
+          state = Math.abs(player.velocity.x) > 1 ? 'walk' : 'idle';
+        }
+        break;
+      }
+    }
+
+    return {
+      ...player,
+      position: { x, y },
+      velocity: { x: player.velocity.x, y: vy },
+      grounded,
+      state,
+    };
+  }
+
   /**
    * Advances one 60 Hz step and returns the domain events it produced.
    * A dead, cinematic, or won simulation is inert until restarted.
@@ -265,6 +407,7 @@ export class Simulation {
     const guardPressed = this.input.guardHeld && !this.guardHeldPrevious;
     this.guardHeldPrevious = this.input.guardHeld;
 
+    const previousPlayer = this.player;
     let player = stepPlayer(this.player, {
       level: this.level,
       input: this.input,
@@ -277,6 +420,7 @@ export class Simulation {
 
     // A standing enemy is a solid obstacle for the player's body.
     player = keepPlayerOutOfEnemies(player, this.enemies);
+    player = this.resolveIslands(player, previousPlayer);
 
     let reason: DeathReason | null = null;
     if (touchesSpikes(this.level, player)) {

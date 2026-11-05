@@ -143,7 +143,7 @@ describe('skeleton', () => {
     expect(getEnemyAttackPhase(bat)).not.toBeNull();
   });
 
-  it('lets one sword swing damage a nearby skeleton once', () => {
+  it('lets one sword swing fell a nearby skeleton', () => {
     const level = flatLevel({ x: 200, y: 40 }, [
       skeletonAt(260, 240, 320),
     ]);
@@ -159,8 +159,8 @@ describe('skeleton', () => {
 
     const enemy = simulation.state.enemies[0];
     expect(enemy).toBeDefined();
-    expect(enemy!.hp).toBe(2);
-    expect(enemy!.state).toBe('hurt');
+    expect(enemy!.hp).toBe(0);
+    expect(enemy!.state).toBe('die');
   });
 
   it('blocks skeleton hits with guard, then dies once guard is dropped', () => {

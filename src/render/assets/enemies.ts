@@ -3,6 +3,11 @@ import batDeath from '../../../graphics/sidescroller_starter_pack/sheets/Bat_Dea
 import batHurt from '../../../graphics/sidescroller_starter_pack/sheets/Bat_Hurt_strip.png?url';
 import batIdle from '../../../graphics/sidescroller_starter_pack/sheets/Bat_Idle_strip.png?url';
 import batWalk from '../../../graphics/sidescroller_starter_pack/sheets/Bat_Walk_strip.png?url';
+import darkKnightAttack from '../../../graphics/sidescroller_starter_pack/sheets/DarkKnight_Attack_strip.png?url';
+import darkKnightDeath from '../../../graphics/sidescroller_starter_pack/sheets/DarkKnight_Death_strip.png?url';
+import darkKnightHurt from '../../../graphics/sidescroller_starter_pack/sheets/DarkKnight_Hurt_strip.png?url';
+import darkKnightIdle from '../../../graphics/sidescroller_starter_pack/sheets/DarkKnight_Idle_strip.png?url';
+import darkKnightWalk from '../../../graphics/sidescroller_starter_pack/sheets/DarkKnight_Walk_strip.png?url';
 import goblinAttack from '../../../graphics/sidescroller_starter_pack/sheets/Goblin_Attack_strip.png?url';
 import goblinDeath from '../../../graphics/sidescroller_starter_pack/sheets/Goblin_Death_strip.png?url';
 import goblinHurt from '../../../graphics/sidescroller_starter_pack/sheets/Goblin_Hurt_strip.png?url';
@@ -13,6 +18,11 @@ import golemDeath from '../../../graphics/sidescroller_starter_pack/sheets/Golem
 import golemHurt from '../../../graphics/sidescroller_starter_pack/sheets/Golem_Hurt_strip.png?url';
 import golemIdle from '../../../graphics/sidescroller_starter_pack/sheets/Golem_Idle_strip.png?url';
 import golemWalk from '../../../graphics/sidescroller_starter_pack/sheets/Golem_Walk_strip.png?url';
+import orcAttack from '../../../graphics/sidescroller_starter_pack/sheets/OrcBrute_Attack_strip.png?url';
+import orcDeath from '../../../graphics/sidescroller_starter_pack/sheets/OrcBrute_Death_strip.png?url';
+import orcHurt from '../../../graphics/sidescroller_starter_pack/sheets/OrcBrute_Hurt_strip.png?url';
+import orcIdle from '../../../graphics/sidescroller_starter_pack/sheets/OrcBrute_Idle_strip.png?url';
+import orcWalk from '../../../graphics/sidescroller_starter_pack/sheets/OrcBrute_Walk_strip.png?url';
 import skeletonAttack from '../../../graphics/sidescroller_starter_pack/sheets/Skeleton_Attack_strip.png?url';
 import skeletonDeath from '../../../graphics/sidescroller_starter_pack/sheets/Skeleton_Death_strip.png?url';
 import skeletonHurt from '../../../graphics/sidescroller_starter_pack/sheets/Skeleton_Hurt_strip.png?url';
@@ -104,6 +114,34 @@ export const ENEMY_ART: Record<EnemyKind, EnemyArt> = {
       attack: golemAttack,
       hurt: golemHurt,
       death: golemDeath,
+    },
+  },
+  darkKnight: {
+    frameWidth: 128,
+    frameHeight: 102,
+    feetY: 98,
+    scale: 2.05,
+    anchor: 'feet',
+    strips: {
+      idle: darkKnightIdle,
+      walk: darkKnightWalk,
+      attack: darkKnightAttack,
+      hurt: darkKnightHurt,
+      death: darkKnightDeath,
+    },
+  },
+  orcBrute: {
+    frameWidth: 118,
+    frameHeight: 98,
+    feetY: 94,
+    scale: 2.1,
+    anchor: 'feet',
+    strips: {
+      idle: orcIdle,
+      walk: orcWalk,
+      attack: orcAttack,
+      hurt: orcHurt,
+      death: orcDeath,
     },
   },
 };

@@ -75,6 +75,7 @@ export const LEVEL_01: Level = parseLevel(WORLD_01_ASCII, {
       y: 888,
       patrolMinX: 5480,
       patrolMaxX: 5840,
+      boss: true,
     },
   ],
   pickups: [

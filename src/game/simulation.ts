@@ -1,4 +1,9 @@
 import {
+  DEFAULT_CHARACTER,
+  DEFAULT_WORLD_MODE,
+  isBossKind,
+} from './characters';
+import {
   createEnemy,
   damageEnemy,
   enemyBounds,
@@ -11,15 +16,21 @@ import { FIXED_DT_SECONDS } from './loop';
 import { overlaps } from './physics';
 import { pickupBounds } from './pickup';
 import {
-  createGolemProjectile,
+  createBossProjectile,
+  createPlayerProjectile,
   projectileBounds,
+  reflectProjectile,
   stepProjectile,
 } from './projectile';
 import {
   applyPlayerDamage,
   blocksDamage,
+  canReflectSpells,
   createPlayer,
   getAttackHitbox,
+  getMeleeDamage,
+  getRangedDamage,
+  grantExtraLife,
   hasFallenOutOfWorld,
   healPlayer,
   PLAYER_HEIGHT,
@@ -28,6 +39,7 @@ import {
   touchesSpikes,
 } from './player';
 import type {
+  CharacterKind,
   DeathReason,
   Enemy,
   EnemyKind,
@@ -40,6 +52,9 @@ import type {
   PickupKind,
   Player,
   Projectile,
+  ProjectileKind,
+  Vec2,
+  WorldMode,
 } from './types';
 
 export type GameEvent =
@@ -55,20 +70,35 @@ export type GameEvent =
       hp: number;
       coins: number;
     }
-  | { type: 'bossIntro'; kind: 'golem' }
+  | { type: 'bossIntro'; kind: EnemyKind }
   | { type: 'bossShot' }
-  | { type: 'bossDefeated' };
+  | { type: 'bossDefeated'; kind: EnemyKind }
+  | { type: 'playerRanged'; kind: ProjectileKind }
+  | { type: 'spellBounced' }
+  | { type: 'berserkStarted' };
 
 const NO_EVENTS: readonly GameEvent[] = [];
 
-/** The player gets this close to the golem before the intro fires. */
+/** The player gets this close to the boss before the intro fires. */
 export const BOSS_TRIGGER_RANGE = 560;
+
+export type SimulationOptions = {
+  character?: CharacterKind;
+  worldMode?: WorldMode;
+};
 
 function killPlayer(player: Player): Player {
   return {
     ...player,
     state: 'die',
     velocity: { x: 0, y: 0 },
+  };
+}
+
+function playerCentre(player: Player): Vec2 {
+  return {
+    x: player.position.x + PLAYER_WIDTH / 2,
+    y: player.position.y + PLAYER_HEIGHT / 2,
   };
 }
 
@@ -87,6 +117,9 @@ export class Simulation {
   private deathReason: DeathReason | null = null;
   private bossIntroShown = false;
   private bossShotCooldown = 1.5;
+  private readonly character: CharacterKind;
+  private readonly worldMode: WorldMode;
+  private readonly bossKind: EnemyKind | null;
 
   private input: InputState = {
     left: false,
@@ -94,17 +127,33 @@ export class Simulation {
     jumpHeld: false,
     attackHeld: false,
     guardHeld: false,
+    rangedHeld: false,
   };
   private jumpHeldPrevious = false;
   private attackHeldPrevious = false;
+  private rangedHeldPrevious = false;
+  private guardHeldPrevious = false;
   /** A single swing may only land once. */
   private attackHitApplied = false;
   /** A sustained guard against one swing should ping once. */
   private blockedThisAttack = false;
 
-  constructor(readonly level: Level) {
-    this.player = createPlayer(level.spawn);
+  constructor(
+    readonly level: Level,
+    options: SimulationOptions = {},
+  ) {
+    this.character = options.character ?? DEFAULT_CHARACTER;
+    this.worldMode = options.worldMode ?? DEFAULT_WORLD_MODE;
+    this.player = createPlayer(level.spawn, this.character);
     this.enemies = level.enemies.map(createEnemy);
+
+    const markedBoss = level.enemies.find((spawn) => spawn.boss === true);
+    this.bossKind =
+      markedBoss?.kind ??
+      (level.enemies.some((spawn) => spawn.kind === 'golem')
+        ? 'golem'
+        : null);
+
     this.pickups = level.pickups.map((spawn) => ({
       kind: spawn.kind,
       position: { x: spawn.x, y: spawn.y },
@@ -122,6 +171,9 @@ export class Simulation {
       pickups: this.pickups,
       projectiles: this.projectiles,
       coins: this.coins,
+      character: this.character,
+      worldMode: this.worldMode,
+      bossKind: this.bossKind,
     };
   }
 
@@ -129,11 +181,49 @@ export class Simulation {
     this.input = { ...input };
   }
 
-  /** Called by the render layer once the golem's speech is finished. */
+  /** Called by the render layer once the boss speech is finished. */
   resumeFromCutscene(): void {
     if (this.mode === 'cutscene') {
       this.mode = 'play';
     }
+  }
+
+  private boss(): Enemy | undefined {
+    const marked = this.enemies.find((enemy) => enemy.boss);
+    if (marked) {
+      return marked;
+    }
+    return this.bossKind === null
+      ? undefined
+      : this.enemies.find((enemy) => enemy.kind === this.bossKind);
+  }
+
+  private nearestTarget(from: Vec2): Vec2 | undefined {
+    let nearest: Enemy | undefined;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const enemy of this.enemies) {
+      if (enemy.state === 'die') {
+        continue;
+      }
+      const stats = statsFor(enemy.kind);
+      const distance = Math.hypot(
+        enemy.position.x + stats.width / 2 - from.x,
+        enemy.position.y + stats.height / 2 - from.y,
+      );
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = enemy;
+      }
+    }
+
+    if (!nearest) {
+      return undefined;
+    }
+    const stats = statsFor(nearest.kind);
+    return {
+      x: nearest.position.x + stats.width / 2,
+      y: nearest.position.y + stats.height / 2,
+    };
   }
 
   /**
@@ -150,17 +240,24 @@ export class Simulation {
       this.attackHitApplied = false;
     }
 
-    // Edge detection keeps a held jump or attack from repeatedly firing.
+    // Edge detection keeps a held button from repeatedly firing.
     const jumpPressed = this.input.jumpHeld && !this.jumpHeldPrevious;
     this.jumpHeldPrevious = this.input.jumpHeld;
     const attackPressed = this.input.attackHeld && !this.attackHeldPrevious;
     this.attackHeldPrevious = this.input.attackHeld;
+    const rangedHeld = this.input.rangedHeld === true;
+    const rangedPressed = rangedHeld && !this.rangedHeldPrevious;
+    this.rangedHeldPrevious = rangedHeld;
+    const guardPressed = this.input.guardHeld && !this.guardHeldPrevious;
+    this.guardHeldPrevious = this.input.guardHeld;
 
     let player = stepPlayer(this.player, {
       level: this.level,
       input: this.input,
       jumpPressed,
       attackPressed,
+      rangedPressed,
+      guardPressed,
       dtSeconds: FIXED_DT_SECONDS,
     });
 
@@ -214,6 +311,9 @@ export class Simulation {
       if (pickup.kind === 'artifact') {
         pickup.collected = true;
         player = { ...player, guardUnlocked: true };
+        if (player.character === 'orcBrute') {
+          player = grantExtraLife(player, 3);
+        }
         events.push({
           type: 'pickupCollected',
           kind: 'artifact',
@@ -240,10 +340,11 @@ export class Simulation {
       });
     }
 
-    // Sword hits resolve before the enemies can act.
+    // Melee hits resolve before the enemies can act.
     if (player.state === 'attack' && !this.attackHitApplied) {
       const hitbox = getAttackHitbox(player);
       if (hitbox !== null) {
+        const damage = getMeleeDamage(player);
         this.enemies = this.enemies.map((enemy) => {
           if (
             this.attackHitApplied ||
@@ -254,7 +355,7 @@ export class Simulation {
           }
 
           this.attackHitApplied = true;
-          const damaged = damageEnemy(enemy, 1);
+          const damaged = damageEnemy(enemy, damage);
           events.push(
             damaged.state === 'die'
               ? { type: 'enemyDied', kind: enemy.kind }
@@ -265,15 +366,27 @@ export class Simulation {
       }
     }
 
-    // The golem's death ends the run in victory.
-    const defeatedGolem = this.enemies.find(
-      (enemy) => enemy.kind === 'golem' && enemy.state === 'die',
-    );
-    if (defeatedGolem) {
-      this.player = player;
-      this.mode = 'victory';
-      events.push({ type: 'bossDefeated' });
-      return [{ type: 'playerMoved', player }, ...events];
+    // A ranged hero launches exactly one shot on the step the attack starts.
+    if (player.rangedStarted) {
+      const centre = playerCentre(player);
+      const kind =
+        player.character === 'mage' ? 'lightning' : 'axe';
+      this.projectiles.push(
+        createPlayerProjectile(
+          kind,
+          {
+            x: centre.x + player.facing * 22,
+            y: centre.y - 8,
+          },
+          player.facing,
+          getRangedDamage(player),
+        ),
+      );
+      events.push({ type: 'playerRanged', kind });
+    }
+
+    if (player.berserkStarted) {
+      events.push({ type: 'berserkStarted' });
     }
 
     this.enemies = this.enemies.map((enemy) =>
@@ -284,27 +397,25 @@ export class Simulation {
       }),
     );
 
-    // Golem intro: freeze everything and hand control to the cutscene.
+    // Boss intro: freeze everything and hand control to the cutscene.
     if (!this.bossIntroShown) {
-      const golem = this.enemies.find(
-        (enemy) => enemy.kind === 'golem' && enemy.state !== 'die',
-      );
-      if (golem && player.state !== 'die') {
-        const golemStats = statsFor('golem');
+      const boss = this.boss();
+      if (boss && boss.state !== 'die' && player.state !== 'die') {
+        const bossStats = statsFor(boss.kind);
         const dx =
           player.position.x +
           PLAYER_WIDTH / 2 -
-          (golem.position.x + golemStats.width / 2);
+          (boss.position.x + bossStats.width / 2);
         const dy =
           player.position.y +
           PLAYER_HEIGHT / 2 -
-          (golem.position.y + golemStats.height / 2);
+          (boss.position.y + bossStats.height / 2);
 
         if (Math.abs(dx) < BOSS_TRIGGER_RANGE && Math.abs(dy) < 280) {
           this.bossIntroShown = true;
           this.mode = 'cutscene';
           this.enemies = this.enemies.map((enemy) =>
-            enemy.kind === 'golem'
+            enemy === boss
               ? {
                   ...enemy,
                   state: 'idle' as const,
@@ -320,33 +431,38 @@ export class Simulation {
           this.player = player;
           return [
             { type: 'playerMoved', player },
-            { type: 'bossIntro', kind: 'golem' },
+            { type: 'bossIntro', kind: boss.kind },
             ...events,
           ];
         }
       }
     }
 
-    // Zatka's ranged attack, then existing orbs advance and resolve.
+    // Boss ranged attack, then existing projectiles advance and resolve.
     this.bossShotCooldown = Math.max(
       0,
       this.bossShotCooldown - FIXED_DT_SECONDS,
     );
-    const golem = this.enemies.find(
-      (enemy) => enemy.kind === 'golem' && enemy.state !== 'die',
-    );
-    if (this.bossIntroShown && golem && player.state !== 'die') {
-      const golemStats = statsFor('golem');
-      const gx = golem.position.x + golemStats.width / 2;
-      const gy = golem.position.y + golemStats.height * 0.55;
+    const boss = this.boss();
+    if (
+      this.bossIntroShown &&
+      boss &&
+      boss.state !== 'die' &&
+      player.state !== 'die' &&
+      this.bossKind !== null &&
+      isBossKind(this.bossKind)
+    ) {
+      const bossStats = statsFor(boss.kind);
+      const gx = boss.position.x + bossStats.width / 2;
+      const gy = boss.position.y + bossStats.height * 0.55;
       const px = player.position.x + PLAYER_WIDTH / 2;
       const py = player.position.y + PLAYER_HEIGHT * 0.55;
 
       if (this.bossShotCooldown <= 0 && Math.abs(px - gx) < 1000) {
         this.projectiles.push(
-          createGolemProjectile({ x: gx, y: gy }, { x: px, y: py }),
+          createBossProjectile(this.bossKind, { x: gx, y: gy }, { x: px, y: py }),
         );
-        this.bossShotCooldown = 2.4;
+        this.bossShotCooldown = this.bossKind === 'orcBrute' ? 2 : 2.4;
         events.push({ type: 'bossShot' });
       }
     }
@@ -358,8 +474,49 @@ export class Simulation {
         continue;
       }
 
+      if (moved.owner === 'player') {
+        const hitIndex = this.enemies.findIndex(
+          (enemy) =>
+            enemy.state !== 'die' &&
+            overlaps(projectileBounds(moved), enemyBounds(enemy)),
+        );
+        const hit = this.enemies[hitIndex];
+        if (!hit) {
+          nextProjectiles.push(moved);
+          continue;
+        }
+
+        const damaged = damageEnemy(hit, moved.damage);
+        this.enemies[hitIndex] = damaged;
+        events.push(
+          damaged.state === 'die'
+            ? { type: 'enemyDied', kind: hit.kind }
+            : { type: 'enemyHit', kind: hit.kind },
+        );
+        continue;
+      }
+
       if (!overlaps(projectileBounds(moved), playerBox)) {
         nextProjectiles.push(moved);
+        continue;
+      }
+
+      if (canReflectSpells(player)) {
+        const from = playerCentre(player);
+        const target =
+          this.nearestTarget(from) ?? {
+            x: from.x - moved.velocity.x,
+            y: from.y - moved.velocity.y,
+          };
+        nextProjectiles.push(
+          reflectProjectile(
+            moved,
+            from,
+            target,
+            Math.max(3, getRangedDamage(player) * 2),
+          ),
+        );
+        events.push({ type: 'spellBounced' });
         continue;
       }
 
@@ -370,7 +527,7 @@ export class Simulation {
 
       if (player.invulnerableTime <= 0) {
         const hpBefore = player.hp;
-        player = applyPlayerDamage(player, 1, moved.position.x);
+        player = applyPlayerDamage(player, moved.damage, moved.position.x);
         if (player.state === 'die') {
           this.status = 'dead';
           this.deathReason = 'sword';
@@ -380,6 +537,19 @@ export class Simulation {
       }
     }
     this.projectiles = nextProjectiles;
+
+    // The world is cleared when its marked boss falls.
+    const defeatedBoss = this.enemies.find(
+      (enemy) =>
+        (enemy.boss || (this.bossKind !== null && enemy.kind === this.bossKind)) &&
+        enemy.state === 'die',
+    );
+    if (defeatedBoss) {
+      this.player = player;
+      this.mode = 'victory';
+      events.push({ type: 'bossDefeated', kind: defeatedBoss.kind });
+      return [{ type: 'playerMoved', player }, ...events];
+    }
 
     // Enemy attacks: guard negates them, i-frames absorb them, otherwise
     // they cost health. Only zero health is fatal.

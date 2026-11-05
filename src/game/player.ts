@@ -1,7 +1,9 @@
+import { characterDefinition } from './characters';
 import { tileAt, tileRange } from './level';
 import { moveAndCollide } from './physics';
 import type {
   AABB,
+  CharacterKind,
   InputState,
   Level,
   Player,
@@ -18,13 +20,14 @@ export const JUMP_SPEED = 640;
 export const GRAVITY = 2000;
 export const MAX_FALL_SPEED = 1400;
 
+/** The Knight's three hearts, kept as the default for existing callers. */
 export const PLAYER_MAX_HP = 3;
 export const PLAYER_HURT_DURATION = 0.35;
 export const PLAYER_INVULNERABILITY = 1.1;
 const HURT_KNOCKBACK_X = 200;
 const HURT_KNOCKBACK_Y = -230;
 
-/** Committed sword swing timings, in seconds. */
+/** Committed attack timings, in seconds. */
 export const ATTACK_STARTUP = 0.12;
 export const ATTACK_ACTIVE = 0.12;
 export const ATTACK_RECOVERY = 0.18;
@@ -35,6 +38,12 @@ export const ATTACK_REACH = 56;
 export const ATTACK_HEIGHT = 52;
 export const ATTACK_OFFSET_Y = 18;
 
+export const RANGED_COOLDOWN = 0.46;
+export const BERSERK_DURATION = 6;
+export const BERSERK_COOLDOWN = 10;
+export const BERSERK_SPEED_MULTIPLIER = 1.25;
+export const BERSERK_DAMAGE_MULTIPLIER = 1.5;
+
 export type PlayerStepContext = {
   level: Level;
   input: InputState;
@@ -42,12 +51,21 @@ export type PlayerStepContext = {
   jumpPressed: boolean;
   /** True only on the fixed step where attack was newly pressed. */
   attackPressed: boolean;
+  /** True only on the fixed step where the ranged button was pressed. */
+  rangedPressed?: boolean;
+  /** True only on the fixed step where the relic/extra button was pressed. */
+  guardPressed?: boolean;
   dtSeconds: number;
 };
 
 export type AttackPhase = 'startup' | 'active' | 'recovery';
 
-export function createPlayer(spawn: Vec2): Player {
+export function createPlayer(
+  spawn: Vec2,
+  character: CharacterKind = 'knight',
+): Player {
+  const definition = characterDefinition(character);
+
   return {
     state: 'idle',
     position: { x: spawn.x, y: spawn.y },
@@ -55,15 +73,22 @@ export function createPlayer(spawn: Vec2): Player {
     facing: 1,
     grounded: false,
     stateTime: 0,
-    hp: PLAYER_MAX_HP,
-    maxHp: PLAYER_MAX_HP,
+    hp: definition.maxHp,
+    maxHp: definition.maxHp,
     invulnerableTime: 0,
     guardUnlocked: false,
+    character,
+    attackKind: 'melee',
+    rangedCooldown: 0,
+    rangedStarted: false,
+    berserkTime: 0,
+    berserkCooldown: 0,
+    berserkStarted: false,
   };
 }
 
 /**
- * Applies combat damage. A non-fatal hit staggers the Knight away from the
+ * Applies combat damage. A non-fatal hit staggers the hero away from the
  * source and grants i-frames; a fatal hit enters the death state.
  */
 export function applyPlayerDamage(
@@ -114,21 +139,61 @@ export function healPlayer(player: Player, amount: number): Player {
   };
 }
 
+/** The Orc's relic grants three permanent extra hearts. */
+export function grantExtraLife(player: Player, amount = 3): Player {
+  const maxHp = player.maxHp + amount;
+  return {
+    ...player,
+    maxHp,
+    hp: Math.min(maxHp, player.hp + amount),
+  };
+}
+
+export function isBerserk(player: Player): boolean {
+  return player.character === 'orcBrute' && player.berserkTime > 0;
+}
+
+/** Multiplier applied to both melee and ranged damage while berserk. */
+export function damageMultiplier(player: Player): number {
+  return isBerserk(player) ? BERSERK_DAMAGE_MULTIPLIER : 1;
+}
+
+export function getMeleeDamage(player: Player): number {
+  const definition = characterDefinition(player.character);
+  return Math.round(definition.meleeDamage * damageMultiplier(player));
+}
+
+export function getRangedDamage(player: Player): number {
+  const definition = characterDefinition(player.character);
+  return Math.round(definition.rangedDamage * damageMultiplier(player));
+}
+
 function horizontalIntent(input: InputState): -1 | 0 | 1 {
   const direction = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   return direction === 0 ? 0 : direction > 0 ? 1 : -1;
 }
 
+function canGuard(player: Player): boolean {
+  return (
+    player.guardUnlocked &&
+    (player.character === 'knight' || player.character === 'mage')
+  );
+}
+
 /** Which state to settle into when standing on the ground. */
-function groundStateFor(input: InputState, guardUnlocked: boolean): PlayerState {
-  if (guardUnlocked && input.guardHeld) {
+function groundStateFor(input: InputState, player: Player): PlayerState {
+  if (canGuard(player) && input.guardHeld) {
     return 'guard';
   }
   return horizontalIntent(input) !== 0 ? 'walk' : 'idle';
 }
 
-function groundVelocityFor(state: PlayerState, input: InputState): number {
-  return state === 'walk' ? horizontalIntent(input) * WALK_SPEED : 0;
+function groundVelocityFor(
+  state: PlayerState,
+  input: InputState,
+  speed: number,
+): number {
+  return state === 'walk' ? horizontalIntent(input) * speed : 0;
 }
 
 /**
@@ -138,8 +203,7 @@ function groundVelocityFor(state: PlayerState, input: InputState): number {
  * - Horizontal steering only happens while grounded and not in combat.
  * - Jumping can only start from the ground.
  * - Jump horizontal momentum is frozen at takeoff; mid-air input is ignored.
- * - Sword swings and guard are ground-only, and a swing is committed for its
- *   full startup/active/recovery window. No combos.
+ * - Melee swings, spells, and guard are committed for their full window.
  */
 export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   if (player.state === 'die') {
@@ -147,14 +211,65 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   }
 
   const { input, level, dtSeconds } = context;
+  const definition = characterDefinition(player.character);
   const direction = horizontalIntent(input);
   const invulnerableTime = Math.max(0, player.invulnerableTime - dtSeconds);
+  const canMelee = definition.meleeDamage > 0;
+  const canRanged = definition.rangedDamage > 0;
+
+  let rangedCooldown = Math.max(0, player.rangedCooldown - dtSeconds);
+  let berserkTime = Math.max(0, player.berserkTime - dtSeconds);
+  let berserkCooldown = Math.max(
+    0,
+    player.berserkCooldown - dtSeconds,
+  );
+  let berserkStarted = false;
+
+  // The Orc's relic turns the extra button into a berserk trigger.
+  if (
+    player.character === 'orcBrute' &&
+    player.guardUnlocked &&
+    context.guardPressed === true &&
+    berserkCooldown <= 0 &&
+    player.state !== 'hurt'
+  ) {
+    berserkTime = BERSERK_DURATION;
+    berserkCooldown = BERSERK_COOLDOWN;
+    berserkStarted = true;
+  }
+
+  const speed =
+    WALK_SPEED * (berserkTime > 0 ? BERSERK_SPEED_MULTIPLIER : 1);
+  const wantsRanged =
+    canRanged &&
+    rangedCooldown <= 0 &&
+    ((context.rangedPressed === true) ||
+      (context.attackPressed && !canMelee));
+  const wantsMelee = canMelee && context.attackPressed;
 
   let state: PlayerState = player.state;
   let stateTime = 0;
   let facing = player.facing;
   let vx = player.velocity.x;
   let vy = player.velocity.y;
+  let attackKind = player.attackKind;
+  let rangedStarted = false;
+
+  const beginRanged = (): void => {
+    state = 'attack';
+    stateTime = 0;
+    attackKind = 'ranged';
+    rangedStarted = true;
+    rangedCooldown = RANGED_COOLDOWN;
+    vx = player.grounded ? 0 : player.velocity.x;
+  };
+
+  const beginMelee = (): void => {
+    state = 'attack';
+    stateTime = 0;
+    attackKind = 'melee';
+    vx = player.grounded ? 0 : player.velocity.x;
+  };
 
   if (player.state === 'hurt') {
     stateTime = player.stateTime + dtSeconds;
@@ -163,9 +278,9 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
 
     if (stateTime >= PLAYER_HURT_DURATION) {
       if (player.grounded) {
-        state = groundStateFor(input, player.guardUnlocked);
+        state = groundStateFor(input, player);
         stateTime = 0;
-        vx = groundVelocityFor(state, input);
+        vx = groundVelocityFor(state, input, speed);
       } else {
         state = player.velocity.y < 0 ? 'jump' : 'fall';
         stateTime = 0;
@@ -173,7 +288,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     }
   } else if (player.state === 'attack') {
     stateTime = player.stateTime + dtSeconds;
-    // A grounded swing plants the feet; an air swing keeps jump momentum.
+    // A grounded attack plants the feet; an air swing keeps jump momentum.
     vx = player.grounded ? 0 : player.velocity.x;
 
     if (stateTime >= ATTACK_DURATION) {
@@ -181,11 +296,11 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
         if (direction !== 0) {
           facing = direction;
         }
-        state = groundStateFor(input, player.guardUnlocked);
+        state = groundStateFor(input, player);
         stateTime = 0;
-        vx = groundVelocityFor(state, input);
+        vx = groundVelocityFor(state, input, speed);
       } else {
-        // Finish the air swing without ever redirecting the jump.
+        // Finish the air attack without ever redirecting the jump.
         state = player.velocity.y < 0 ? 'jump' : 'fall';
         stateTime = 0;
         vx = player.velocity.x;
@@ -197,14 +312,15 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     }
     vx = 0;
 
-    if (context.attackPressed) {
+    if (wantsMelee) {
       // Striking out of a guard is allowed; the swing is committed.
-      state = 'attack';
+      beginMelee();
+    } else if (wantsRanged) {
+      beginRanged();
+    } else if (!input.guardHeld || !canGuard(player)) {
+      state = groundStateFor(input, player);
       stateTime = 0;
-    } else if (!input.guardHeld || !player.guardUnlocked) {
-      state = groundStateFor(input, player.guardUnlocked);
-      stateTime = 0;
-      vx = groundVelocityFor(state, input);
+      vx = groundVelocityFor(state, input, speed);
     } else {
       state = 'guard';
       stateTime = player.stateTime + dtSeconds;
@@ -214,31 +330,31 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
       facing = direction;
     }
 
-    if (context.attackPressed) {
-      state = 'attack';
-      stateTime = 0;
-      vx = 0;
-    } else if (input.guardHeld && player.guardUnlocked) {
+    if (wantsMelee) {
+      beginMelee();
+    } else if (wantsRanged) {
+      beginRanged();
+    } else if (input.guardHeld && canGuard(player)) {
       state = 'guard';
       stateTime = 0;
       vx = 0;
     } else if (context.jumpPressed) {
       state = 'jump';
       stateTime = 0;
-      vx = direction * WALK_SPEED;
+      vx = direction * speed;
       vy = -JUMP_SPEED;
     } else {
       state = direction !== 0 ? 'walk' : 'idle';
       stateTime = 0;
-      vx = direction * WALK_SPEED;
+      vx = direction * speed;
     }
   } else {
     // Airborne: horizontal velocity stays committed from takeoff.
-    if (context.attackPressed) {
+    if (wantsMelee) {
       // Air attacks are allowed and keep the jump's horizontal momentum.
-      state = 'attack';
-      stateTime = 0;
-      vx = player.velocity.x;
+      beginMelee();
+    } else if (wantsRanged) {
+      beginRanged();
     } else {
       state = player.state === 'jump' ? 'jump' : 'fall';
       stateTime = 0;
@@ -280,7 +396,7 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     if (direction !== 0) {
       facing = direction;
     }
-    finalState = groundStateFor(input, player.guardUnlocked);
+    finalState = groundStateFor(input, player);
     finalTime = 0;
   }
 
@@ -295,12 +411,19 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     maxHp: player.maxHp,
     invulnerableTime,
     guardUnlocked: player.guardUnlocked,
+    character: player.character,
+    attackKind,
+    rangedCooldown,
+    rangedStarted,
+    berserkTime,
+    berserkCooldown,
+    berserkStarted,
   };
 }
 
-/** Timing window of the sword swing, or null when not attacking. */
+/** Timing window of the melee swing, or null when not attacking. */
 export function getAttackPhase(player: Player): AttackPhase | null {
-  if (player.state !== 'attack') {
+  if (player.state !== 'attack' || player.attackKind !== 'melee') {
     return null;
   }
   if (player.stateTime < ATTACK_STARTUP) {
@@ -315,7 +438,7 @@ export function getAttackPhase(player: Player): AttackPhase | null {
   return null;
 }
 
-/** Sword hitbox, present only during the active window. */
+/** Melee hitbox, present only during the active window. */
 export function getAttackHitbox(player: Player): AABB | null {
   if (getAttackPhase(player) !== 'active') {
     return null;
@@ -334,7 +457,16 @@ export function getAttackHitbox(player: Player): AABB | null {
 
 /** Guard negates incoming damage; enemies can call this before applying it. */
 export function blocksDamage(player: Player): boolean {
-  return player.guardUnlocked && player.state === 'guard';
+  return canGuard(player) && player.state === 'guard';
+}
+
+/** The Mage's earned skill reflects hostile spells while guarding. */
+export function canReflectSpells(player: Player): boolean {
+  return (
+    player.character === 'mage' &&
+    player.guardUnlocked &&
+    player.state === 'guard'
+  );
 }
 
 /** True when any part of the player overlaps a deadly tile. */

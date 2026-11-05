@@ -44,7 +44,16 @@ export function publishEvents(
         bus.emit('bossShot');
         break;
       case 'bossDefeated':
-        bus.emit('bossDefeated');
+        bus.emit('bossDefeated', event.kind);
+        break;
+      case 'playerRanged':
+        bus.emit('playerRanged', event.kind);
+        break;
+      case 'spellBounced':
+        bus.emit('spellBounced');
+        break;
+      case 'berserkStarted':
+        bus.emit('berserkStarted');
         break;
     }
   }

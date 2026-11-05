@@ -130,6 +130,23 @@ export class Sfx {
     this.tone(760, 260, 0.1, 'sawtooth', 0.04);
   }
 
+  cast(): void {
+    this.tone(1240, 420, 0.2, 'triangle', 0.07);
+    this.tone(620, 1860, 0.16, 'sine', 0.04);
+    this.noise(0.08, 0.04, 3200);
+  }
+
+  reflect(): void {
+    this.tone(880, 1760, 0.18, 'triangle', 0.09);
+    this.tone(440, 1320, 0.22, 'sine', 0.05);
+  }
+
+  berserk(): void {
+    this.tone(110, 55, 0.7, 'sawtooth', 0.14);
+    this.tone(220, 140, 0.5, 'square', 0.06);
+    this.noise(0.4, 0.08, 260);
+  }
+
   hit(): void {
     this.tone(190, 70, 0.15, 'square', 0.12);
     this.noise(0.09, 0.12, 600);

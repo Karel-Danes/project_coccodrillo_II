@@ -1,7 +1,20 @@
 import Phaser from 'phaser';
 import type { InputState } from '../game/types';
 
-type HoldKey = 'left' | 'right' | 'jumpHeld' | 'attackHeld' | 'guardHeld';
+type HoldKey =
+  | 'left'
+  | 'right'
+  | 'jumpHeld'
+  | 'attackHeld'
+  | 'rangedHeld'
+  | 'guardHeld';
+
+export type TouchControlsOptions = {
+  showMelee: boolean;
+  showRanged: boolean;
+  rangedLabel: string;
+  extraLabel: string;
+};
 
 const IDLE_FILL = 0x0f141a;
 const ACTIVE_FILL = 0x3a4a5c;
@@ -13,9 +26,10 @@ function labelSize(key: HoldKey): string {
     case 'jumpHeld':
       return '22px';
     case 'attackHeld':
-      return '19px';
+    case 'rangedHeld':
+      return '18px';
     case 'guardHeld':
-      return '16px';
+      return '15px';
     case 'left':
     case 'right':
       return '32px';
@@ -25,7 +39,7 @@ function labelSize(key: HoldKey): string {
 /**
  * On-screen hold buttons for touch devices. Each button tracks its own
  * pointer ids, so walking and jumping can be held with separate fingers.
- * The guard button is hidden until the shield artefact is collected.
+ * The extra/relic button is hidden until the artefact is collected.
  */
 export class TouchControls {
   readonly input: InputState = {
@@ -33,6 +47,7 @@ export class TouchControls {
     right: false,
     jumpHeld: false,
     attackHeld: false,
+    rangedHeld: false,
     guardHeld: false,
   };
 
@@ -48,34 +63,43 @@ export class TouchControls {
 
   constructor(
     private readonly scene: Phaser.Scene,
+    private readonly options: TouchControlsOptions,
     private readonly layer?: Phaser.GameObjects.Layer,
   ) {}
 
   create(): void {
-    // Mouse pointer + three touch pointers: two thumbs and jump.
+    // Mouse pointer + enough touch pointers for both thumbs and jump.
     this.scene.input.addPointer(3);
 
     const height = this.scene.scale.height;
     const width = this.scene.scale.width;
-    // Raised a little more and slightly larger than the previous pass.
     const bottom = height - 116;
 
-    // Movement on the left; combat and jump on the right.
+    // Movement on the left.
     this.createButton(165, bottom, 62, '◀', 'left');
     this.createButton(315, bottom, 62, '▶', 'right');
-    this.createButton(width - 285, bottom, 62, 'ATK', 'attackHeld');
+
+    // Combat buttons on the right, leaving room for the big jump target.
+    if (this.options.showMelee && this.options.showRanged) {
+      this.createButton(width - 445, bottom, 58, this.options.rangedLabel, 'rangedHeld');
+      this.createButton(width - 290, bottom, 60, 'ATK', 'attackHeld');
+    } else if (this.options.showMelee) {
+      this.createButton(width - 290, bottom, 62, 'ATK', 'attackHeld');
+    } else if (this.options.showRanged) {
+      this.createButton(width - 290, bottom, 64, this.options.rangedLabel, 'rangedHeld');
+    }
 
     const jumpX = width - 130;
     const jumpRadius = 74;
     this.createButton(jumpX, bottom, jumpRadius, 'JUMP', 'jumpHeld');
 
-    // Guard sits directly above the big jump button.
+    // The earned relic action sits directly above the big jump button.
     const guardRadius = 58;
     const guard = this.createButton(
       jumpX,
       bottom - (jumpRadius + guardRadius),
       guardRadius,
-      'GUARD',
+      this.options.extraLabel,
       'guardHeld',
     );
     this.guardObjects = [guard.circle, guard.text];
@@ -113,7 +137,7 @@ export class TouchControls {
     }
   }
 
-  /** Called when the shield artefact is picked up. */
+  /** Called when the relic is picked up and the extra skill unlocks. */
   setGuardVisible(visible: boolean): void {
     const wasVisible = this.guardUnlocked;
     this.guardUnlocked = visible;
@@ -150,6 +174,7 @@ export class TouchControls {
     this.input.right = false;
     this.input.jumpHeld = false;
     this.input.attackHeld = false;
+    this.input.rangedHeld = false;
     this.input.guardHeld = false;
   }
 

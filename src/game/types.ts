@@ -31,11 +31,38 @@ export type EnemyKind =
   | 'goblin'
   | 'slime'
   | 'bat'
-  | 'golem';
+  | 'golem'
+  | 'darkKnight'
+  | 'orcBrute';
 
 export type EnemyState = 'idle' | 'walk' | 'attack' | 'hurt' | 'die';
 
 export type GameMode = 'play' | 'cutscene' | 'victory';
+
+export type CharacterKind = 'knight' | 'mage' | 'orcBrute';
+
+export type WorldMode = 'campaign' | 'random';
+
+export type AttackKind = 'melee' | 'ranged';
+
+export type CharacterDefinition = {
+  kind: CharacterKind;
+  name: string;
+  epithet: string;
+  maxHp: number;
+  /** Damage per melee hit. Zero means the hero cannot melee. */
+  meleeDamage: number;
+  /** Damage per ranged hit. Zero means the hero cannot shoot. */
+  rangedDamage: number;
+  meleeName: string | null;
+  rangedName: string | null;
+  basicAbility: string;
+  extraAbility: string;
+  extraDetail: string;
+  /** Short label for the earned relic button. */
+  extraLabel: string;
+  accent: number;
+};
 
 export type EnemySpawn = {
   kind: EnemyKind;
@@ -44,6 +71,8 @@ export type EnemySpawn = {
   y: number;
   patrolMinX: number;
   patrolMaxX: number;
+  /** Marks the single boss that must fall to clear the world. */
+  boss?: boolean;
 };
 
 export type Enemy = {
@@ -63,6 +92,8 @@ export type Enemy = {
   homeY: number;
   /** Seconds until the enemy may swing again. */
   attackCooldown: number;
+  /** True for the one boss that ends this world. */
+  boss: boolean;
 };
 
 export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact';
@@ -106,15 +137,41 @@ export type Player = {
   maxHp: number;
   /** Seconds of remaining post-hit invulnerability. */
   invulnerableTime: number;
-  /** The guard skill is found as an artefact before the boss. */
+  /** The extra skill is found as an artefact before the boss. */
   guardUnlocked: boolean;
+  character: CharacterKind;
+  /** Whether the current committed swing is melee or ranged. */
+  attackKind: AttackKind;
+  /** Seconds until another ranged attack may start. */
+  rangedCooldown: number;
+  /** True for the one step on which a ranged shot left the hand. */
+  rangedStarted: boolean;
+  /** Orc berserk remaining time, in seconds. */
+  berserkTime: number;
+  berserkCooldown: number;
+  /** True for the one step on which berserk was activated. */
+  berserkStarted: boolean;
 };
+
+export type ProjectileKind =
+  | 'golemOrb'
+  | 'darkOrb'
+  | 'lightning'
+  | 'axe'
+  | 'reflected';
+
+export type ProjectileOwner = 'player' | 'enemy';
 
 export type Projectile = {
   position: Vec2;
   velocity: Vec2;
-  /** Seconds before the orb fizzles out. */
+  /** Seconds before the projectile fizzles out. */
   lifetime: number;
+  owner: ProjectileOwner;
+  kind: ProjectileKind;
+  damage: number;
+  /** Downward acceleration, used by thrown axes. */
+  gravity: number;
 };
 
 export type InputState = {
@@ -123,6 +180,8 @@ export type InputState = {
   jumpHeld: boolean;
   attackHeld: boolean;
   guardHeld: boolean;
+  /** Optional so existing keyboard-only tests stay concise. */
+  rangedHeld?: boolean;
 };
 
 export type GameStatus = 'playing' | 'dead';
@@ -136,4 +195,14 @@ export type GameState = {
   pickups: readonly Pickup[];
   projectiles: readonly Projectile[];
   coins: number;
+  character: CharacterKind;
+  worldMode: WorldMode;
+  bossKind: EnemyKind | null;
+};
+
+/** Everything needed to start a run, passed from the menu to the world. */
+export type GameConfig = {
+  character: CharacterKind;
+  worldMode: WorldMode;
+  seed?: number;
 };

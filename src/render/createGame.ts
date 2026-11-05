@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { GameEventBus } from '../bridge/events';
 import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from './constants';
 import { GameScene } from './scenes/GameScene';
+import { MenuScene } from './scenes/MenuScene';
 
 export function createGame(parent: string, bus: GameEventBus): Phaser.Game {
   return new Phaser.Game({
@@ -16,6 +17,6 @@ export function createGame(parent: string, bus: GameEventBus): Phaser.Game {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    scene: [new GameScene(bus)],
+    scene: [new MenuScene(), new GameScene(bus)],
   });
 }

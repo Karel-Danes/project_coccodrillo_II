@@ -4,7 +4,16 @@ import {
   CHARACTERS,
   isCharacterKind,
 } from '../../game/characters';
-import type { CharacterKind, WorldMode } from '../../game/types';
+import {
+  DEFAULT_DIFFICULTY,
+  DIFFICULTIES,
+  isDifficulty,
+} from '../../game/difficulty';
+import type {
+  CharacterKind,
+  Difficulty,
+  WorldMode,
+} from '../../game/types';
 import { PLAYER_ART, playerTextureKey } from '../assets/players';
 import { createBackdrop, loadDesertAssets } from '../backdrop';
 import {
@@ -25,6 +34,12 @@ type ModePanel = {
   title: Phaser.GameObjects.Text;
 };
 
+type DifficultyChip = {
+  difficulty: Difficulty;
+  background: Phaser.GameObjects.Rectangle;
+  label: Phaser.GameObjects.Text;
+};
+
 /**
  * Title screen: pick a hero and a world. Cards display the exact rulebook
  * numbers that drive the simulation, not decorative ratings.
@@ -32,14 +47,17 @@ type ModePanel = {
 export class MenuScene extends Phaser.Scene {
   private selectedCharacter: CharacterKind = 'knight';
   private selectedMode: WorldMode = 'campaign';
+  private selectedDifficulty: Difficulty = DEFAULT_DIFFICULTY;
   private cards: CharacterCard[] = [];
   private modePanels: ModePanel[] = [];
+  private difficultyChips: DifficultyChip[] = [];
   private startButton: Phaser.GameObjects.Rectangle | null = null;
   private startLabel: Phaser.GameObjects.Text | null = null;
   private starting = false;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyC!: Phaser.Input.Keyboard.Key;
+  private keyF!: Phaser.Input.Keyboard.Key;
   private keyEnter!: Phaser.Input.Keyboard.Key;
   private keyOne!: Phaser.Input.Keyboard.Key;
   private keyTwo!: Phaser.Input.Keyboard.Key;
@@ -57,11 +75,13 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     this.cards = [];
     this.modePanels = [];
+    this.difficultyChips = [];
     this.startButton = null;
     this.startLabel = null;
     this.starting = false;
     this.selectedCharacter = 'knight';
     this.selectedMode = 'campaign';
+    this.selectedDifficulty = DEFAULT_DIFFICULTY;
 
     const width = this.scale.width;
     const height = this.scale.height;
@@ -156,7 +176,9 @@ export class MenuScene extends Phaser.Scene {
       const melee =
         definition.meleeDamage > 0 ? String(definition.meleeDamage) : '—';
       const ranged =
-        definition.rangedDamage > 0 ? String(definition.rangedDamage) : '—';
+        definition.rangedDamage > 0
+          ? `${definition.rangedDamage}${definition.rangedRequiresBerserk ? '*' : ''}`
+          : '—';
 
       this.add
         .text(
@@ -218,14 +240,32 @@ export class MenuScene extends Phaser.Scene {
       'New terrain · new monsters · one random boss',
     );
 
+    this.add
+      .text(355, 657, 'DIFFICULTY', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#74849a',
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(4);
+
+    const difficultyOrder: Difficulty[] = ['low', 'middle', 'nightmare'];
+    difficultyOrder.forEach((difficulty, index) => {
+      this.createDifficultyChip(
+        455 + index * 185,
+        657,
+        difficulty,
+      );
+    });
+
     const startButton = this.add
-      .rectangle(width / 2, 700, 360, 54, 0xd8b46a, 1)
+      .rectangle(width / 2, 706, 360, 46, 0xd8b46a, 1)
       .setStrokeStyle(2, 0xfff0c4, 0.9)
       .setDepth(3)
       .setInteractive({ useHandCursor: true });
     startButton.on('pointerdown', () => this.startGame());
     const startLabel = this.add
-      .text(width / 2, 700, 'ENTER THE WORLD', {
+      .text(width / 2, 706, 'ENTER THE WORLD', {
         fontFamily: 'monospace',
         fontSize: '20px',
         color: '#181008',
@@ -239,7 +279,7 @@ export class MenuScene extends Phaser.Scene {
       .text(
         width / 2,
         744,
-        '← →  choose hero     ↑ ↓ / C  change world     ENTER  begin',
+        '← → hero     ↑ ↓ / C world     F difficulty     ENTER begin',
         {
           fontFamily: 'monospace',
           fontSize: '14px',
@@ -255,6 +295,7 @@ export class MenuScene extends Phaser.Scene {
     }
     this.cursors = keyboard.createCursorKeys();
     this.keyC = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
+    this.keyF = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
     this.keyEnter = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.keyOne = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
     this.keyTwo = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
@@ -270,14 +311,19 @@ export class MenuScene extends Phaser.Scene {
       params.has('boss') ||
       params.has('spawnX') ||
       params.has('character') ||
-      params.has('world')
+      params.has('world') ||
+      params.has('difficulty')
     ) {
       const character = params.get('character');
       const world = params.get('world');
+      const difficulty = params.get('difficulty');
       this.selectedCharacter = isCharacterKind(character)
         ? character
         : 'knight';
       this.selectedMode = world === 'random' ? 'random' : 'campaign';
+      this.selectedDifficulty = isDifficulty(difficulty)
+        ? difficulty
+        : DEFAULT_DIFFICULTY;
       this.time.delayedCall(0, () => this.startGame());
     }
   }
@@ -301,6 +347,9 @@ export class MenuScene extends Phaser.Scene {
     }
     if (Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
       this.toggleMode();
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.keyF)) {
+      this.cycleDifficulty();
     }
     if (Phaser.Input.Keyboard.JustDown(this.keyOne)) {
       this.selectedCharacter = 'knight';
@@ -329,7 +378,7 @@ export class MenuScene extends Phaser.Scene {
     subtitle: string,
   ): void {
     const background = this.add
-      .rectangle(x, 618, 480, 74, 0x0c1118, 0.78)
+      .rectangle(x, 607, 480, 58, 0x0c1118, 0.78)
       .setStrokeStyle(2, 0x35445a, 0.8)
       .setDepth(3)
       .setInteractive({ useHandCursor: true });
@@ -339,23 +388,59 @@ export class MenuScene extends Phaser.Scene {
     });
 
     const titleText = this.add
-      .text(x, 594, title, {
+      .text(x, 583, title, {
         fontFamily: 'monospace',
-        fontSize: '20px',
+        fontSize: '19px',
         color: '#f3dfa2',
       })
       .setOrigin(0.5, 0)
       .setDepth(4);
     this.add
-      .text(x, 620, subtitle, {
+      .text(x, 606, subtitle, {
         fontFamily: 'monospace',
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#7f8fa3',
       })
       .setOrigin(0.5, 0)
       .setDepth(4);
 
     this.modePanels.push({ mode, background, title: titleText });
+  }
+
+  private createDifficultyChip(
+    x: number,
+    y: number,
+    difficulty: Difficulty,
+  ): void {
+    const definition = DIFFICULTIES[difficulty];
+    const background = this.add
+      .rectangle(x, y, 150, 28, 0x0c1118, 0.8)
+      .setStrokeStyle(2, 0x35445a, 0.8)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true });
+    background.on('pointerdown', () => {
+      this.selectedDifficulty = difficulty;
+      this.refresh();
+    });
+
+    const label = this.add
+      .text(x, y, definition.name, {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#8b98a5',
+      })
+      .setOrigin(0.5)
+      .setDepth(4);
+
+    this.difficultyChips.push({ difficulty, background, label });
+  }
+
+  private cycleDifficulty(): void {
+    const order: Difficulty[] = ['low', 'middle', 'nightmare'];
+    const index = order.indexOf(this.selectedDifficulty);
+    this.selectedDifficulty =
+      order[(index + 1) % order.length] ?? 'middle';
+    this.refresh();
   }
 
   private moveSelection(delta: number): void {
@@ -403,6 +488,23 @@ export class MenuScene extends Phaser.Scene {
       panel.title.setColor(selected ? '#d9f6ff' : '#8b98a5');
     }
 
+    for (const chip of this.difficultyChips) {
+      const selected = chip.difficulty === this.selectedDifficulty;
+      const definition = DIFFICULTIES[chip.difficulty];
+      chip.background.setFillStyle(
+        selected ? 0x1b2530 : 0x0c1118,
+        selected ? 0.95 : 0.75,
+      );
+      chip.background.setStrokeStyle(
+        selected ? 3 : 2,
+        selected ? definition.accent : 0x35445a,
+        selected ? 1 : 0.8,
+      );
+      chip.label.setColor(
+        selected ? '#f1e7cf' : '#8b98a5',
+      );
+    }
+
     this.startButton?.setFillStyle(
       this.selectedMode === 'campaign' ? 0xd8b46a : 0x8fc7ff,
       1,
@@ -424,6 +526,7 @@ export class MenuScene extends Phaser.Scene {
       this.scene.start('GameScene', {
         character: this.selectedCharacter,
         worldMode: this.selectedMode,
+        difficulty: this.selectedDifficulty,
       });
     });
   }

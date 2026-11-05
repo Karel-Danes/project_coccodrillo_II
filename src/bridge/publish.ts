@@ -43,6 +43,9 @@ export function publishEvents(
       case 'bossShot':
         bus.emit('bossShot');
         break;
+      case 'enemyShot':
+        bus.emit('enemyShot');
+        break;
       case 'bossDefeated':
         bus.emit('bossDefeated', event.kind);
         break;

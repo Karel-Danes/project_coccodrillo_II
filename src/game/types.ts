@@ -43,6 +43,8 @@ export type CharacterKind = 'knight' | 'mage' | 'orcBrute';
 
 export type WorldMode = 'campaign' | 'random';
 
+export type Difficulty = 'low' | 'middle' | 'nightmare';
+
 export type AttackKind = 'melee' | 'ranged';
 
 export type CharacterDefinition = {
@@ -54,6 +56,8 @@ export type CharacterDefinition = {
   meleeDamage: number;
   /** Damage per ranged hit. Zero means the hero cannot shoot. */
   rangedDamage: number;
+  /** Only the Orc's rage unlocks his axe throw. */
+  rangedRequiresBerserk: boolean;
   meleeName: string | null;
   rangedName: string | null;
   basicAbility: string;
@@ -73,6 +77,8 @@ export type EnemySpawn = {
   patrolMaxX: number;
   /** Marks the single boss that must fall to clear the world. */
   boss?: boolean;
+  /** Nightmare enemies can fire bolts as well as swing. */
+  ranged?: boolean;
 };
 
 export type Enemy = {
@@ -84,6 +90,7 @@ export type Enemy = {
   state: EnemyState;
   stateTime: number;
   hp: number;
+  maxHp: number;
   grounded: boolean;
   patrolMinX: number;
   patrolMaxX: number;
@@ -94,6 +101,10 @@ export type Enemy = {
   attackCooldown: number;
   /** True for the one boss that ends this world. */
   boss: boolean;
+  /** Nightmare archers fire bolts between melee swings. */
+  ranged: boolean;
+  rangedCooldown: number;
+  rangedDamage: number;
 };
 
 export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact';
@@ -112,6 +123,17 @@ export type Pickup = {
   collected: boolean;
 };
 
+export type DecorationKind = 'tree' | 'rock';
+
+export type DecorationSpawn = {
+  kind: DecorationKind;
+  /** Anchor x, and the ground line y. */
+  x: number;
+  y: number;
+  scale: number;
+  variant: number;
+};
+
 export type Level = {
   cols: number;
   rows: number;
@@ -122,6 +144,8 @@ export type Level = {
   spawn: Vec2;
   enemies: readonly EnemySpawn[];
   pickups: readonly PickupSpawn[];
+  /** Non-collidable scenery for random worlds. */
+  decorations?: readonly DecorationSpawn[];
 };
 
 export type Player = {
@@ -156,6 +180,7 @@ export type Player = {
 export type ProjectileKind =
   | 'golemOrb'
   | 'darkOrb'
+  | 'enemyBolt'
   | 'lightning'
   | 'axe'
   | 'reflected';
@@ -197,6 +222,7 @@ export type GameState = {
   coins: number;
   character: CharacterKind;
   worldMode: WorldMode;
+  difficulty: Difficulty;
   bossKind: EnemyKind | null;
 };
 
@@ -204,5 +230,6 @@ export type GameState = {
 export type GameConfig = {
   character: CharacterKind;
   worldMode: WorldMode;
+  difficulty: Difficulty;
   seed?: number;
 };

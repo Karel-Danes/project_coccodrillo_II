@@ -9,9 +9,11 @@ type HoldKey =
   | 'rangedHeld'
   | 'guardHeld';
 
+export type TouchRangedMode = 'none' | 'side' | 'overJump';
+
 export type TouchControlsOptions = {
   showMelee: boolean;
-  showRanged: boolean;
+  ranged: TouchRangedMode;
   rangedLabel: string;
   extraLabel: string;
 };
@@ -39,7 +41,8 @@ function labelSize(key: HoldKey): string {
 /**
  * On-screen hold buttons for touch devices. Each button tracks its own
  * pointer ids, so walking and jumping can be held with separate fingers.
- * The extra/relic button is hidden until the artefact is collected.
+ * The extra/relic button is hidden until the artefact is collected; the
+ * Orc's throw button replaces it only while berserk is burning.
  */
 export class TouchControls {
   readonly input: InputState = {
@@ -58,8 +61,12 @@ export class TouchControls {
   private guardObjects: Array<
     Phaser.GameObjects.Shape | Phaser.GameObjects.Text
   > = [];
+  private rangedObjects: Array<
+    Phaser.GameObjects.Shape | Phaser.GameObjects.Text
+  > = [];
   private guardCircle: Phaser.GameObjects.Arc | null = null;
-  private guardUnlocked = false;
+  private extraUnlocked = false;
+  private throwVisible = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -79,14 +86,14 @@ export class TouchControls {
     this.createButton(165, bottom, 62, '◀', 'left');
     this.createButton(315, bottom, 62, '▶', 'right');
 
+    const sideRanged =
+      this.options.ranged === 'side' && !this.options.showMelee;
+
     // Combat buttons on the right, leaving room for the big jump target.
-    if (this.options.showMelee && this.options.showRanged) {
-      this.createButton(width - 445, bottom, 58, this.options.rangedLabel, 'rangedHeld');
-      this.createButton(width - 290, bottom, 60, 'ATK', 'attackHeld');
+    if (sideRanged) {
+      this.createButton(width - 290, bottom, 64, this.options.rangedLabel, 'rangedHeld');
     } else if (this.options.showMelee) {
       this.createButton(width - 290, bottom, 62, 'ATK', 'attackHeld');
-    } else if (this.options.showRanged) {
-      this.createButton(width - 290, bottom, 64, this.options.rangedLabel, 'rangedHeld');
     }
 
     const jumpX = width - 130;
@@ -104,7 +111,20 @@ export class TouchControls {
     );
     this.guardObjects = [guard.circle, guard.text];
     this.guardCircle = guard.circle;
-    this.setGuardVisible(false);
+
+    // The Orc's throw shares that slot and appears only during berserk.
+    if (this.options.ranged === 'overJump') {
+      const thrown = this.createButton(
+        jumpX,
+        bottom - (jumpRadius + guardRadius),
+        guardRadius,
+        this.options.rangedLabel,
+        'rangedHeld',
+      );
+      this.rangedObjects = [thrown.circle, thrown.text];
+    }
+
+    this.syncAuxiliaryButtons(false);
   }
 
   destroy(): void {
@@ -117,6 +137,7 @@ export class TouchControls {
     this.cleanups.length = 0;
     this.objects.length = 0;
     this.guardObjects = [];
+    this.rangedObjects = [];
     this.guardCircle = null;
   }
 
@@ -130,43 +151,57 @@ export class TouchControls {
       return;
     }
 
-    if (!this.guardUnlocked) {
-      for (const object of this.guardObjects) {
-        object.setVisible(false);
-      }
-    }
+    this.syncAuxiliaryButtons(false);
   }
 
   /** Called when the relic is picked up and the extra skill unlocks. */
   setGuardVisible(visible: boolean): void {
-    const wasVisible = this.guardUnlocked;
-    this.guardUnlocked = visible;
+    const wasVisible = this.extraUnlocked;
+    this.extraUnlocked = visible;
 
     if (!visible) {
       this.input.guardHeld = false;
       this.guardCircle?.setFillStyle(IDLE_FILL, FILL_ALPHA);
-      for (const object of this.guardObjects) {
-        object.setVisible(false);
-      }
+    }
+
+    this.syncAuxiliaryButtons(visible && !wasVisible);
+  }
+
+  /** Shows the Orc's throw button only while berserk is active. */
+  setThrowVisible(visible: boolean): void {
+    if (this.options.ranged !== 'overJump' || visible === this.throwVisible) {
+      return;
+    }
+    this.throwVisible = visible;
+    if (!visible) {
+      this.input.rangedHeld = false;
+    }
+    this.syncAuxiliaryButtons(false);
+  }
+
+  private syncAuxiliaryButtons(animate: boolean): void {
+    const showExtra = this.extraUnlocked && !this.throwVisible;
+    for (const object of this.guardObjects) {
+      object.setVisible(showExtra);
+    }
+    for (const object of this.rangedObjects) {
+      object.setVisible(this.throwVisible);
+    }
+
+    if (!animate || !showExtra) {
       return;
     }
 
     for (const object of this.guardObjects) {
-      object.setVisible(true);
+      object.setScale(0.65).setAlpha(0);
     }
-
-    if (!wasVisible) {
-      for (const object of this.guardObjects) {
-        object.setScale(0.65).setAlpha(0);
-      }
-      this.scene.tweens.add({
-        targets: this.guardObjects,
-        scale: 1,
-        alpha: 1,
-        duration: 260,
-        ease: 'Back.Out',
-      });
-    }
+    this.scene.tweens.add({
+      targets: this.guardObjects,
+      scale: 1,
+      alpha: 1,
+      duration: 260,
+      ease: 'Back.Out',
+    });
   }
 
   private clearInput(): void {

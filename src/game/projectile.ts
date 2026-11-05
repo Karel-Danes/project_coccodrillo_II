@@ -16,6 +16,8 @@ export const LIGHTNING_LIFETIME = 1.5;
 export const AXE_SPEED = 560;
 export const AXE_GRAVITY = 1350;
 export const AXE_LIFETIME = 2.4;
+export const ENEMY_BOLT_SPEED = 390;
+export const ENEMY_BOLT_LIFETIME = 3.6;
 
 function projectile(
   from: Vec2,
@@ -88,6 +90,22 @@ export function createBossProjectile(
   }
 
   return createGolemProjectile(from, target);
+}
+
+/** A nightmare creature's hostile bolt. */
+export function createEnemyProjectile(
+  from: Vec2,
+  target: Vec2,
+  damage: number,
+): Projectile {
+  return projectile(
+    from,
+    velocityToward(from, target, ENEMY_BOLT_SPEED),
+    'enemyBolt',
+    'enemy',
+    damage,
+    ENEMY_BOLT_LIFETIME,
+  );
 }
 
 /** Mage lightning or an Orc thrown axe, aimed along the hero's facing. */

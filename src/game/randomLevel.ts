@@ -1,9 +1,15 @@
 import { statsFor } from './enemy';
+import {
+  DEFAULT_DIFFICULTY,
+  difficultyDefinition,
+} from './difficulty';
 import { parseLevel } from './level';
 import { TILE_SIZE } from './levels';
 import { PLAYER_HEIGHT } from './player';
 import { RANDOM_BOSSES, type BossKind } from './characters';
 import type {
+  DecorationSpawn,
+  Difficulty,
   EnemyKind,
   EnemySpawn,
   Level,
@@ -43,11 +49,15 @@ type Platform = {
 
 /**
  * Builds a traversable 96 x 18 ruin route: a solid floor with narrow spike
- * pits, one-tile jumpable ledges, a three-step relic dais, and a flat boss
+ * pits, stepped ledges, a three-step relic dais, scenery, and a flat boss
  * arena at the far right.
  */
-export function generateRandomLevel(seed = randomSeed()): Level {
+export function generateRandomLevel(
+  seed = randomSeed(),
+  difficulty: Difficulty = DEFAULT_DIFFICULTY,
+): Level {
   const rng = createSeededRandom(seed);
+  const tuning = difficultyDefinition(difficulty);
   const grid: string[][] = Array.from({ length: ROWS }, () =>
     Array.from({ length: COLS }, () => '.'),
   );
@@ -64,16 +74,16 @@ export function generateRandomLevel(seed = randomSeed()): Level {
 
   // Narrow pits. Two tiles is the widest that a running jump clears.
   const pits: Array<{ col: number; width: number }> = [];
-  let pitCursor = 16 + Math.floor(rng() * 4);
+  let pitCursor = 12 + Math.floor(rng() * 4);
   while (pitCursor < 64) {
-    const width = rng() < 0.45 ? 2 : 1;
+    const width = rng() < 0.5 ? 2 : 1;
     pits.push({ col: pitCursor, width });
     for (let offset = 0; offset < width; offset += 1) {
       const col = pitCursor + offset;
       grid[GROUND_ROW]![col] = '.';
       grid[GROUND_ROW + 1]![col] = '^';
     }
-    pitCursor += width + 7 + Math.floor(rng() * 6);
+    pitCursor += width + 5 + Math.floor(rng() * 4);
   }
 
   const overlapsPit = (col: number, width: number): boolean =>
@@ -82,21 +92,55 @@ export function generateRandomLevel(seed = randomSeed()): Level {
         col < pit.col + pit.width + 2 && col + width > pit.col - 2,
     );
 
-  // One-tile ledges are always reachable from the floor.
-  const platforms: Platform[] = [];
-  let platformCursor = 8 + Math.floor(rng() * 4);
-  while (platformCursor < 66) {
-    const width = 2 + Math.floor(rng() * 3);
-    if (!overlapsPit(platformCursor, width)) {
-      const topRow = GROUND_ROW - 1;
-      for (let row = topRow; row < GROUND_ROW; row += 1) {
-        for (let col = platformCursor; col < platformCursor + width; col += 1) {
-          grid[row]![col] = '#';
-        }
+  const fillBlock = (
+    col: number,
+    width: number,
+    topRow: number,
+  ): void => {
+    for (let row = topRow; row < GROUND_ROW; row += 1) {
+      for (let cell = col; cell < col + width; cell += 1) {
+        grid[row]![cell] = '#';
       }
-      platforms.push({ col: platformCursor, width, height: 1, topRow });
     }
-    platformCursor += width + 4 + Math.floor(rng() * 5);
+  };
+
+  // Dense ledges. Some are two storeys tall with an attached one-tile step,
+  // so every ledge remains climbable. This makes random worlds much jumpier.
+  const platforms: Platform[] = [];
+  let platformCursor = 7 + Math.floor(rng() * 4);
+  while (platformCursor < 67) {
+    const width = 2 + Math.floor(rng() * 3);
+    const stepped = rng() < 0.42;
+    const totalWidth = width + (stepped ? 1 : 0);
+
+    if (!overlapsPit(platformCursor, totalWidth)) {
+      if (stepped) {
+        fillBlock(platformCursor, 1, GROUND_ROW - 1);
+        fillBlock(platformCursor + 1, width, GROUND_ROW - 2);
+        platforms.push({
+          col: platformCursor,
+          width: 1,
+          height: 1,
+          topRow: GROUND_ROW - 1,
+        });
+        platforms.push({
+          col: platformCursor + 1,
+          width,
+          height: 2,
+          topRow: GROUND_ROW - 2,
+        });
+      } else {
+        fillBlock(platformCursor, width, GROUND_ROW - 1);
+        platforms.push({
+          col: platformCursor,
+          width,
+          height: 1,
+          topRow: GROUND_ROW - 1,
+        });
+      }
+    }
+
+    platformCursor += totalWidth + 2 + Math.floor(rng() * 4);
   }
 
   // A three-step dais carries the relic, so it is climbable one jump at a time.
@@ -107,11 +151,7 @@ export function generateRandomLevel(seed = randomSeed()): Level {
     { col: daisCol + 4, width: 3, height: 3, topRow: GROUND_ROW - 3 },
   ] as const;
   for (const step of daisSteps) {
-    for (let row = step.topRow; row < GROUND_ROW; row += 1) {
-      for (let col = step.col; col < step.col + step.width; col += 1) {
-        grid[row]![col] = '#';
-      }
-    }
+    fillBlock(step.col, step.width, step.topRow);
   }
 
   const topY = (row: number): number => row * TILE_SIZE;
@@ -133,15 +173,65 @@ export function generateRandomLevel(seed = randomSeed()): Level {
     return 4;
   };
 
+  const decorations: DecorationSpawn[] = [];
+  for (let col = 6; col < 78; col += 1) {
+    if (
+      grid[GROUND_ROW]![col] !== '#' ||
+      grid[GROUND_ROW - 1]![col] !== '.' ||
+      overlapsPit(col, 1)
+    ) {
+      continue;
+    }
+
+    if (rng() < 0.2) {
+      decorations.push({
+        kind: 'tree',
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: groundY,
+        scale: 0.32 + rng() * 0.2,
+        variant: Math.floor(rng() * 3),
+      });
+    } else if (rng() < 0.28) {
+      decorations.push({
+        kind: 'rock',
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: groundY,
+        scale: 0.65 + rng() * 0.55,
+        variant: Math.floor(rng() * 3),
+      });
+    }
+  }
+
+  // A little scenery around the arena entrance, kept out of the fight lane.
+  decorations.push({
+    kind: 'tree',
+    x: 79 * TILE_SIZE + TILE_SIZE / 2,
+    y: groundY,
+    scale: 0.4,
+    variant: 1,
+  });
+  decorations.push({
+    kind: 'rock',
+    x: 81 * TILE_SIZE,
+    y: groundY,
+    scale: 0.9,
+    variant: 2,
+  });
+
   const enemies: EnemySpawn[] = [];
   const groundKinds: EnemyKind[] = ['skeleton', 'goblin', 'slime'];
   const usedCols: number[] = [];
-  const enemyCount = 5 + Math.floor(rng() * 3);
+  const targetCount = Math.max(
+    3,
+    5 + Math.floor(rng() * 3) + tuning.enemyCountBonus,
+  );
+  let attempts = 0;
 
-  for (let index = 0; index < enemyCount; index += 1) {
+  while (enemies.length < targetCount && attempts < targetCount * 10) {
+    attempts += 1;
     const flying = rng() < 0.24;
-    const col = 10 + Math.floor(rng() * 56);
-    if (usedCols.some((used) => Math.abs(used - col) < 7)) {
+    const col = 10 + Math.floor(rng() * 58);
+    if (usedCols.some((used) => Math.abs(used - col) < 5)) {
       continue;
     }
     if (
@@ -155,6 +245,7 @@ export function generateRandomLevel(seed = randomSeed()): Level {
     const kind = flying ? 'bat' : pick(rng, groundKinds);
     const stats = statsFor(kind);
     const x = col * TILE_SIZE + (TILE_SIZE - stats.width) / 2;
+    const ranged = tuning.rangedChance > 0 && rng() < tuning.rangedChance;
 
     if (flying) {
       enemies.push({
@@ -163,6 +254,7 @@ export function generateRandomLevel(seed = randomSeed()): Level {
         y: groundY - 180 - Math.floor(rng() * 90),
         patrolMinX: x - 150,
         patrolMaxX: x + 150,
+        ranged,
       });
       continue;
     }
@@ -185,6 +277,7 @@ export function generateRandomLevel(seed = randomSeed()): Level {
         (right + 1) * TILE_SIZE - stats.width - 8,
         x + 110,
       ),
+      ranged,
     });
   }
 
@@ -235,11 +328,12 @@ export function generateRandomLevel(seed = randomSeed()): Level {
   });
 
   const rows = grid.map((row) => row.join(''));
-
-  return parseLevel(rows, {
+  const level = parseLevel(rows, {
     tileSize: TILE_SIZE,
     spawn: { x: 3 * TILE_SIZE, y: groundY - PLAYER_HEIGHT },
     enemies,
     pickups,
   });
+
+  return { ...level, decorations };
 }

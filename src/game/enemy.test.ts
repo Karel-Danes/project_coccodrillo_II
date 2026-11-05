@@ -87,15 +87,15 @@ describe('skeleton', () => {
     expect(sawActive).toBe(true);
   });
 
-  it('takes three hits to kill and reacts to each non-fatal hit', () => {
+  it('takes its full life pool to kill and reacts to each hit', () => {
     let enemy = createEnemy(skeletonAt(200, 120, 260));
+    const maxHp = enemy.maxHp;
 
-    enemy = damageEnemy(enemy, 1);
-    expect(enemy.hp).toBe(2);
-    expect(enemy.state).toBe('hurt');
-
-    enemy = damageEnemy(enemy, 1);
-    expect(enemy.hp).toBe(1);
+    for (let hit = 1; hit < maxHp; hit += 1) {
+      enemy = damageEnemy(enemy, 1);
+      expect(enemy.hp).toBe(maxHp - hit);
+      expect(enemy.state).toBe('hurt');
+    }
 
     enemy = damageEnemy(enemy, 1);
     expect(enemy.hp).toBe(0);
@@ -143,7 +143,7 @@ describe('skeleton', () => {
     expect(getEnemyAttackPhase(bat)).not.toBeNull();
   });
 
-  it('lets one sword swing fell a nearby skeleton', () => {
+  it('lets one sword swing bite deep into a nearby skeleton', () => {
     const level = flatLevel({ x: 200, y: 40 }, [
       skeletonAt(260, 240, 320),
     ]);
@@ -159,8 +159,8 @@ describe('skeleton', () => {
 
     const enemy = simulation.state.enemies[0];
     expect(enemy).toBeDefined();
-    expect(enemy!.hp).toBe(0);
-    expect(enemy!.state).toBe('die');
+    expect(enemy!.hp).toBe(enemy!.maxHp - 5);
+    expect(enemy!.state).toBe('hurt');
   });
 
   it('blocks skeleton hits with guard, then dies once guard is dropped', () => {

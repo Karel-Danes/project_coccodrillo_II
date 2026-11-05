@@ -9,6 +9,12 @@ import {
   isWorldMode,
 } from '../../game/characters';
 import {
+  DEFAULT_DIFFICULTY,
+  difficultyDefinition,
+  isDifficulty,
+  prepareCampaignLevel,
+} from '../../game/difficulty';
+import {
   getEnemyAttackPhase,
   statsFor,
 } from '../../game/enemy';
@@ -52,6 +58,10 @@ import {
 import { COIN_KEYS, HEART_KEYS } from '../assets/pickups';
 import { createBackdrop, loadDesertAssets, type Backdrop } from '../backdrop';
 import {
+  createDecorations,
+  loadDecorationAssets,
+} from '../decorations';
+import {
   loadEnemyAssets,
   registerEnemyAnimations,
 } from '../enemyAnimations';
@@ -72,6 +82,7 @@ const COLORS = {
 const DEFAULT_CONFIG: GameConfig = {
   character: 'knight',
   worldMode: 'campaign',
+  difficulty: DEFAULT_DIFFICULTY,
 };
 
 type EnemyView = {
@@ -116,6 +127,13 @@ function projectileVisual(kind: ProjectileKind): {
         scale: 0.1,
         additive: true,
       };
+    case 'enemyBolt':
+      return {
+        texture: 'boss-glow',
+        tint: 0x9dff9a,
+        scale: 0.07,
+        additive: true,
+      };
     case 'reflected':
       return {
         texture: 'boss-glow',
@@ -146,6 +164,7 @@ function queryConfig(data?: Partial<GameConfig>): GameConfig {
   const params = new URLSearchParams(window.location.search);
   const characterParam = params.get('character');
   const worldParam = params.get('world');
+  const difficultyParam = params.get('difficulty');
   const seedParam = Number(params.get('seed'));
 
   return {
@@ -155,6 +174,11 @@ function queryConfig(data?: Partial<GameConfig>): GameConfig {
     worldMode:
       data?.worldMode ??
       (isWorldMode(worldParam) ? worldParam : DEFAULT_CONFIG.worldMode),
+    difficulty:
+      data?.difficulty ??
+      (isDifficulty(difficultyParam)
+        ? difficultyParam
+        : DEFAULT_CONFIG.difficulty),
     seed:
       data?.seed ??
       (Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined),
@@ -183,7 +207,10 @@ function resolveCampaignLevel(): Level {
 
 function resolveLevel(config: GameConfig): Level {
   if (config.worldMode === 'random') {
-    const level = generateRandomLevel(config.seed ?? randomSeed());
+    const level = generateRandomLevel(
+      config.seed ?? randomSeed(),
+      config.difficulty,
+    );
     if (typeof window === 'undefined') {
       return level;
     }
@@ -200,7 +227,10 @@ function resolveLevel(config: GameConfig): Level {
     return level;
   }
 
-  return resolveCampaignLevel();
+  return prepareCampaignLevel(
+    resolveCampaignLevel(),
+    config.difficulty,
+  );
 }
 
 /**
@@ -213,6 +243,7 @@ export class GameScene extends Phaser.Scene {
   private simulation = new Simulation(LEVEL_01, {
     character: 'knight',
     worldMode: 'campaign',
+    difficulty: DEFAULT_DIFFICULTY,
   });
   private startLevel: Level = LEVEL_01;
   private tick = 0;
@@ -300,6 +331,7 @@ export class GameScene extends Phaser.Scene {
     loadEnemyAssets(this);
     loadPickupAssets(this);
     loadDesertAssets(this);
+    loadDecorationAssets(this);
     loadTerrainAssets(this);
   }
 
@@ -333,6 +365,7 @@ export class GameScene extends Phaser.Scene {
     this.simulation = new Simulation(this.startLevel, {
       character: this.config.character,
       worldMode: this.config.worldMode,
+      difficulty: this.config.difficulty,
     });
 
     if (new URLSearchParams(window.location.search).has('guard')) {
@@ -377,6 +410,7 @@ export class GameScene extends Phaser.Scene {
 
     this.backdrop = createBackdrop(this, viewWidth, viewHeight, groundY);
     createTerrainTexture(this, level);
+    createDecorations(this, level);
     this.drawSpikes(level);
 
     // A cool moon over the desert night.
@@ -569,7 +603,7 @@ export class GameScene extends Phaser.Scene {
           definition.kind === 'mage'
             ? '← → / A D  walk    SPACE  jump    X or Z  lightning    C  bounce    R  restart    M  menu'
             : definition.kind === 'orcBrute'
-              ? '← → / A D  walk    SPACE  jump    X  axe    Z  throw    C  berserk    R  restart    M  menu'
+              ? '← → / A D  walk    SPACE  jump    X  axe    C  berserk    Z  throw while berserk    R  restart    M  menu'
               : '← → / A D  walk    SPACE  jump    X  sword    C  guard    R  restart    M  menu',
           {
             fontFamily: 'monospace',
@@ -683,7 +717,11 @@ export class GameScene extends Phaser.Scene {
         this,
         {
           showMelee: definition.meleeDamage > 0,
-          showRanged: definition.rangedDamage > 0,
+          ranged: definition.rangedRequiresBerserk
+            ? 'overJump'
+            : definition.rangedDamage > 0
+              ? 'side'
+              : 'none',
           rangedLabel: definition.kind === 'mage' ? 'CAST' : 'THROW',
           extraLabel: definition.extraLabel,
         },
@@ -716,6 +754,7 @@ export class GameScene extends Phaser.Scene {
     this.bus.on('pickupCollected', this.onPickupCollected, this);
     this.bus.on('bossIntro', this.startBossCutscene, this);
     this.bus.on('bossShot', this.onBossShot, this);
+    this.bus.on('enemyShot', this.onEnemyShot, this);
     this.bus.on('bossDefeated', this.onBossDefeated, this);
     this.bus.on('spellBounced', this.onSpellBounced, this);
     this.bus.on('berserkStarted', this.onBerserkStarted, this);
@@ -729,6 +768,7 @@ export class GameScene extends Phaser.Scene {
       this.bus.off('pickupCollected', this.onPickupCollected, this);
       this.bus.off('bossIntro', this.startBossCutscene, this);
       this.bus.off('bossShot', this.onBossShot, this);
+      this.bus.off('enemyShot', this.onEnemyShot, this);
       this.bus.off('bossDefeated', this.onBossDefeated, this);
       this.bus.off('spellBounced', this.onSpellBounced, this);
       this.bus.off('berserkStarted', this.onBerserkStarted, this);
@@ -828,6 +868,10 @@ export class GameScene extends Phaser.Scene {
 
   private onBossShot(): void {
     this.sfx.bossShot();
+  }
+
+  private onEnemyShot(): void {
+    this.sfx.enemyShot();
   }
 
   private onSpellBounced(): void {
@@ -1351,6 +1395,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.restart({
       character: this.config.character,
       worldMode: this.config.worldMode,
+      difficulty: this.config.difficulty,
       // A random world should be new every run.
       seed:
         this.config.worldMode === 'random'
@@ -1479,15 +1524,17 @@ export class GameScene extends Phaser.Scene {
     );
     const alive = enemies.filter((enemy) => enemy.state !== 'die').length;
     this.debugText.setText([
-      `COCCODRILLO-II — ${this.config.worldMode === 'campaign' ? 'CAMPAIGN' : 'RANDOM WORLD'}`,
+      `COCCODRILLO-II — ${this.config.worldMode === 'campaign' ? 'CAMPAIGN' : 'RANDOM WORLD'} · ${difficultyDefinition(this.config.difficulty).name}`,
       `${characterDefinition(player.character).name} · mode ${mode} · ${player.state}`,
       `hp ${player.hp}/${player.maxHp} · pos ${player.position.x.toFixed(0)}, ${player.position.y.toFixed(0)} · vy ${player.velocity.y.toFixed(0)}`,
-      `enemies ${alive}/${enemies.length} alive${boss ? ` · boss ${boss.hp}/${statsFor(boss.kind).maxHp}` : ''}`,
+      `enemies ${alive}/${enemies.length} alive${boss ? ` · boss ${boss.hp}/${boss.maxHp}` : ''}`,
       `cam ${this.cameras.main.scrollX.toFixed(0)}, ${this.cameras.main.scrollY.toFixed(0)} · tick ${this.tick}`,
     ]);
   }
 
   private renderPlayer(player: Player): void {
+    this.touchControls?.setThrowVisible(player.berserkTime > 0);
+
     this.playerSprite.setPosition(
       player.position.x + PLAYER_WIDTH / 2,
       player.position.y + PLAYER_HEIGHT,
@@ -1635,6 +1682,11 @@ export class GameScene extends Phaser.Scene {
       const stats = statsFor(enemy.kind);
       view.sprite.setVisible(true);
       view.sprite.setFlipX(enemy.facing === -1);
+      if (enemy.ranged) {
+        view.sprite.setTint(0xc7a8ff);
+      } else {
+        view.sprite.clearTint();
+      }
 
       if (art.anchor === 'feet') {
         view.sprite.setPosition(
@@ -1661,7 +1713,7 @@ export class GameScene extends Phaser.Scene {
       if (
         enemy.boss ||
         enemy.state === 'die' ||
-        enemy.hp >= stats.maxHp
+        enemy.hp >= enemy.maxHp
       ) {
         continue;
       }
@@ -1671,7 +1723,7 @@ export class GameScene extends Phaser.Scene {
       this.enemyHud.fillStyle(0x14181f, 0.9).fillRect(x, y, 48, 7);
       this.enemyHud
         .fillStyle(0xc4453d, 1)
-        .fillRect(x + 1, y + 1, 46 * (enemy.hp / stats.maxHp), 5);
+        .fillRect(x + 1, y + 1, 46 * (enemy.hp / enemy.maxHp), 5);
     }
   }
 
@@ -1702,7 +1754,7 @@ export class GameScene extends Phaser.Scene {
         : bossName(boss.kind),
     );
 
-    const maxHp = statsFor(boss.kind).maxHp;
+    const maxHp = boss.maxHp;
     const barWidth = 600;
     const barHeight = 18;
     const x = this.scale.width / 2 - barWidth / 2;

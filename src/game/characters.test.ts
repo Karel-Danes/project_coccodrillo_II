@@ -64,7 +64,7 @@ describe('character rulebook', () => {
     expect(projectile?.damage).toBe(3);
   });
 
-  it('launches an Orc axe with five damage', () => {
+  it('does not let the Orc throw axes outside berserk', () => {
     const simulation = new Simulation(flatLevel(), {
       character: 'orcBrute',
     });
@@ -72,6 +72,21 @@ describe('character rulebook', () => {
       simulation.step();
     }
 
+    simulation.setInput({ ...NO_INPUT, rangedHeld: true });
+    simulation.step();
+
+    expect(simulation.state.projectiles).toHaveLength(0);
+  });
+
+  it('launches an Orc axe with five damage only while berserk', () => {
+    const simulation = new Simulation(flatLevel(), {
+      character: 'orcBrute',
+    });
+    for (let i = 0; i < 10; i += 1) {
+      simulation.step();
+    }
+
+    simulation.state.player.berserkTime = 5;
     simulation.setInput({ ...NO_INPUT, rangedHeld: true });
     simulation.step();
 
@@ -174,14 +189,27 @@ describe('character rulebook', () => {
     simulation.setInput({ ...NO_INPUT, guardHeld: true });
 
     let bounced = false;
+    let sawReflected = false;
     for (let i = 0; i < 240 && simulation.state.mode === 'play'; i += 1) {
       const events = simulation.step();
       if (events.some((event) => event.type === 'spellBounced')) {
         bounced = true;
       }
+      if (
+        simulation.state.projectiles.some(
+          (projectile) =>
+            projectile.owner === 'player' &&
+            projectile.kind === 'reflected',
+        )
+      ) {
+        sawReflected = true;
+      }
     }
 
     expect(bounced).toBe(true);
+    expect(sawReflected).toBe(true);
+    const boss = simulation.state.enemies[0]!;
+    expect(boss.hp).toBeLessThan(boss.maxHp);
     expect(simulation.state.player.hp).toBe(2);
     expect(simulation.state.status).toBe('playing');
   });

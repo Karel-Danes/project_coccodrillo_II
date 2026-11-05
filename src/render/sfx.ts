@@ -190,6 +190,11 @@ export class Sfx {
     this.noise(0.24, 0.06, 520);
   }
 
+  enemyShot(): void {
+    this.tone(620, 240, 0.18, 'square', 0.05);
+    this.noise(0.08, 0.04, 1400);
+  }
+
   enemySwing(kind: EnemyKind): void {
     const base =
       kind === 'golem'

@@ -1,5 +1,9 @@
 import { moveAndCollide } from './physics';
 import {
+  DEFAULT_DIFFICULTY,
+  difficultyDefinition,
+} from './difficulty';
+import {
   GRAVITY,
   MAX_FALL_SPEED,
   PLAYER_HEIGHT,
@@ -8,6 +12,7 @@ import {
 } from './player';
 import type {
   AABB,
+  Difficulty,
   Enemy,
   EnemyKind,
   EnemySpawn,
@@ -43,7 +48,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     behavior: 'ground',
     width: 40,
     height: 88,
-    maxHp: 3,
+    maxHp: 12,
     walkSpeed: 80,
     aggroRange: 260,
     attackRange: 86,
@@ -61,7 +66,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     behavior: 'ground',
     width: 40,
     height: 80,
-    maxHp: 2,
+    maxHp: 10,
     walkSpeed: 110,
     aggroRange: 300,
     attackRange: 80,
@@ -79,7 +84,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     behavior: 'ground',
     width: 42,
     height: 38,
-    maxHp: 2,
+    maxHp: 8,
     walkSpeed: 45,
     aggroRange: 220,
     attackRange: 60,
@@ -97,7 +102,7 @@ export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
     behavior: 'flying',
     width: 40,
     height: 36,
-    maxHp: 2,
+    maxHp: 6,
     walkSpeed: 95,
     aggroRange: 300,
     attackRange: 60,
@@ -181,8 +186,17 @@ export type EnemyStepContext = {
   dtSeconds: number;
 };
 
-export function createEnemy(spawn: EnemySpawn): Enemy {
+export function createEnemy(
+  spawn: EnemySpawn,
+  difficulty: Difficulty = DEFAULT_DIFFICULTY,
+): Enemy {
   const stats = statsFor(spawn.kind);
+  const tuning = difficultyDefinition(difficulty);
+  const maxHp = Math.max(
+    1,
+    Math.round(stats.maxHp * tuning.enemyHpMultiplier),
+  );
+
   return {
     kind: spawn.kind,
     position: { x: spawn.x, y: spawn.y },
@@ -190,7 +204,8 @@ export function createEnemy(spawn: EnemySpawn): Enemy {
     facing: -1,
     state: 'idle',
     stateTime: 0,
-    hp: stats.maxHp,
+    hp: maxHp,
+    maxHp,
     grounded: false,
     patrolMinX: spawn.patrolMinX,
     patrolMaxX: spawn.patrolMaxX,
@@ -198,6 +213,9 @@ export function createEnemy(spawn: EnemySpawn): Enemy {
     homeY: spawn.y,
     attackCooldown: 0,
     boss: spawn.boss === true,
+    ranged: spawn.ranged === true,
+    rangedCooldown: tuning.rangedCooldown * 0.5,
+    rangedDamage: tuning.rangedDamage,
   };
 }
 
@@ -424,10 +442,24 @@ export function stepEnemy(enemy: Enemy, context: EnemyStepContext): Enemy {
   }
 
   if (stats.behavior === 'flying') {
-    return stepFlyingEnemy(enemy, stats, context);
+    const updated = stepFlyingEnemy(enemy, stats, context);
+    return {
+      ...updated,
+      rangedCooldown: Math.max(
+        0,
+        updated.rangedCooldown - context.dtSeconds,
+      ),
+    };
   }
 
-  return stepGroundEnemy(enemy, stats, context);
+  const updated = stepGroundEnemy(enemy, stats, context);
+  return {
+    ...updated,
+    rangedCooldown: Math.max(
+      0,
+      updated.rangedCooldown - context.dtSeconds,
+    ),
+  };
 }
 
 export function getEnemyAttackPhase(enemy: Enemy): AttackPhase | null {

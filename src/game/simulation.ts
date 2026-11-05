@@ -4,6 +4,10 @@ import {
   isBossKind,
 } from './characters';
 import {
+  DEFAULT_DIFFICULTY,
+  difficultyDefinition,
+} from './difficulty';
+import {
   createEnemy,
   damageEnemy,
   enemyBounds,
@@ -17,6 +21,7 @@ import { overlaps } from './physics';
 import { pickupBounds } from './pickup';
 import {
   createBossProjectile,
+  createEnemyProjectile,
   createPlayerProjectile,
   projectileBounds,
   reflectProjectile,
@@ -30,6 +35,7 @@ import {
   getAttackHitbox,
   getMeleeDamage,
   getRangedDamage,
+  getWardBounds,
   grantExtraLife,
   hasFallenOutOfWorld,
   healPlayer,
@@ -41,6 +47,7 @@ import {
 import type {
   CharacterKind,
   DeathReason,
+  Difficulty,
   Enemy,
   EnemyKind,
   GameMode,
@@ -74,6 +81,7 @@ export type GameEvent =
   | { type: 'bossShot' }
   | { type: 'bossDefeated'; kind: EnemyKind }
   | { type: 'playerRanged'; kind: ProjectileKind }
+  | { type: 'enemyShot' }
   | { type: 'spellBounced' }
   | { type: 'berserkStarted' };
 
@@ -85,6 +93,7 @@ export const BOSS_TRIGGER_RANGE = 560;
 export type SimulationOptions = {
   character?: CharacterKind;
   worldMode?: WorldMode;
+  difficulty?: Difficulty;
 };
 
 function killPlayer(player: Player): Player {
@@ -119,6 +128,7 @@ export class Simulation {
   private bossShotCooldown = 1.5;
   private readonly character: CharacterKind;
   private readonly worldMode: WorldMode;
+  private readonly difficulty: Difficulty;
   private readonly bossKind: EnemyKind | null;
 
   private input: InputState = {
@@ -144,8 +154,11 @@ export class Simulation {
   ) {
     this.character = options.character ?? DEFAULT_CHARACTER;
     this.worldMode = options.worldMode ?? DEFAULT_WORLD_MODE;
+    this.difficulty = options.difficulty ?? DEFAULT_DIFFICULTY;
     this.player = createPlayer(level.spawn, this.character);
-    this.enemies = level.enemies.map(createEnemy);
+    this.enemies = level.enemies.map((spawn) =>
+      createEnemy(spawn, this.difficulty),
+    );
 
     const markedBoss = level.enemies.find((spawn) => spawn.boss === true);
     this.bossKind =
@@ -173,6 +186,7 @@ export class Simulation {
       coins: this.coins,
       character: this.character,
       worldMode: this.worldMode,
+      difficulty: this.difficulty,
       bossKind: this.bossKind,
     };
   }
@@ -283,6 +297,7 @@ export class Simulation {
     }
 
     const events: GameEvent[] = [];
+    const tuning = difficultyDefinition(this.difficulty);
     const playerBox = {
       x: player.position.x,
       y: player.position.y,
@@ -438,6 +453,38 @@ export class Simulation {
       }
     }
 
+    // Nightmare creatures fire between their melee swings.
+    for (const enemy of this.enemies) {
+      if (
+        !enemy.ranged ||
+        enemy.boss ||
+        enemy.state === 'die' ||
+        enemy.state === 'hurt' ||
+        enemy.state === 'attack' ||
+        enemy.rangedCooldown > 0
+      ) {
+        continue;
+      }
+
+      const stats = statsFor(enemy.kind);
+      const ex = enemy.position.x + stats.width / 2;
+      const ey = enemy.position.y + stats.height * 0.5;
+      const px = player.position.x + PLAYER_WIDTH / 2;
+      const py = player.position.y + PLAYER_HEIGHT * 0.5;
+
+      if (Math.abs(px - ex) < 720 && Math.abs(py - ey) < 230) {
+        this.projectiles.push(
+          createEnemyProjectile(
+            { x: ex, y: ey },
+            { x: px, y: py },
+            enemy.rangedDamage,
+          ),
+        );
+        enemy.rangedCooldown = tuning.rangedCooldown;
+        events.push({ type: 'enemyShot' });
+      }
+    }
+
     // Boss ranged attack, then existing projectiles advance and resolve.
     this.bossShotCooldown = Math.max(
       0,
@@ -459,9 +506,16 @@ export class Simulation {
       const py = player.position.y + PLAYER_HEIGHT * 0.55;
 
       if (this.bossShotCooldown <= 0 && Math.abs(px - gx) < 1000) {
-        this.projectiles.push(
-          createBossProjectile(this.bossKind, { x: gx, y: gy }, { x: px, y: py }),
+        const shot = createBossProjectile(
+          this.bossKind,
+          { x: gx, y: gy },
+          { x: px, y: py },
         );
+        shot.damage = Math.max(
+          1,
+          Math.round(shot.damage * tuning.enemyDamageMultiplier),
+        );
+        this.projectiles.push(shot);
         this.bossShotCooldown = this.bossKind === 'orcBrute' ? 2 : 2.4;
         events.push({ type: 'bossShot' });
       }
@@ -496,12 +550,15 @@ export class Simulation {
         continue;
       }
 
-      if (!overlaps(projectileBounds(moved), playerBox)) {
+      const ward = canReflectSpells(player)
+        ? getWardBounds(player)
+        : null;
+      if (!overlaps(projectileBounds(moved), ward ?? playerBox)) {
         nextProjectiles.push(moved);
         continue;
       }
 
-      if (canReflectSpells(player)) {
+      if (ward !== null) {
         const from = playerCentre(player);
         const target =
           this.nearestTarget(from) ?? {
@@ -566,10 +623,16 @@ export class Simulation {
             }
           } else if (player.invulnerableTime <= 0) {
             const stats = statsFor(enemy.kind);
+            const damage = Math.max(
+              1,
+              Math.round(
+                stats.damage * tuning.enemyDamageMultiplier,
+              ),
+            );
             const hpBefore = player.hp;
             player = applyPlayerDamage(
               player,
-              stats.damage,
+              damage,
               enemy.position.x + stats.width / 2,
             );
 

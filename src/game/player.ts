@@ -42,7 +42,6 @@ export const RANGED_COOLDOWN = 0.46;
 export const BERSERK_DURATION = 6;
 export const BERSERK_COOLDOWN = 10;
 export const BERSERK_SPEED_MULTIPLIER = 1.25;
-export const BERSERK_DAMAGE_MULTIPLIER = 1.5;
 
 export type PlayerStepContext = {
   level: Level;
@@ -153,19 +152,12 @@ export function isBerserk(player: Player): boolean {
   return player.character === 'orcBrute' && player.berserkTime > 0;
 }
 
-/** Multiplier applied to both melee and ranged damage while berserk. */
-export function damageMultiplier(player: Player): number {
-  return isBerserk(player) ? BERSERK_DAMAGE_MULTIPLIER : 1;
-}
-
 export function getMeleeDamage(player: Player): number {
-  const definition = characterDefinition(player.character);
-  return Math.round(definition.meleeDamage * damageMultiplier(player));
+  return characterDefinition(player.character).meleeDamage;
 }
 
 export function getRangedDamage(player: Player): number {
-  const definition = characterDefinition(player.character);
-  return Math.round(definition.rangedDamage * damageMultiplier(player));
+  return characterDefinition(player.character).rangedDamage;
 }
 
 function horizontalIntent(input: InputState): -1 | 0 | 1 {
@@ -215,7 +207,6 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
   const direction = horizontalIntent(input);
   const invulnerableTime = Math.max(0, player.invulnerableTime - dtSeconds);
   const canMelee = definition.meleeDamage > 0;
-  const canRanged = definition.rangedDamage > 0;
 
   let rangedCooldown = Math.max(0, player.rangedCooldown - dtSeconds);
   let berserkTime = Math.max(0, player.berserkTime - dtSeconds);
@@ -237,6 +228,11 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     berserkCooldown = BERSERK_COOLDOWN;
     berserkStarted = true;
   }
+
+  // The Orc's axe throw exists only while the rage is burning.
+  const canRanged =
+    definition.rangedDamage > 0 &&
+    (!definition.rangedRequiresBerserk || berserkTime > 0);
 
   const speed =
     WALK_SPEED * (berserkTime > 0 ? BERSERK_SPEED_MULTIPLIER : 1);
@@ -467,6 +463,21 @@ export function canReflectSpells(player: Player): boolean {
     player.guardUnlocked &&
     player.state === 'guard'
   );
+}
+
+/**
+ * The visible ward is larger than the body. Spells that strike the bubble
+ * edge should bounce, not sail past the 40 px collision box.
+ */
+export function getWardBounds(player: Player): AABB {
+  const cx = player.position.x + PLAYER_WIDTH / 2;
+  const cy = player.position.y + PLAYER_HEIGHT / 2;
+  return {
+    x: cx - 62,
+    y: cy - 82,
+    width: 124,
+    height: 164,
+  };
 }
 
 /** True when any part of the player overlaps a deadly tile. */

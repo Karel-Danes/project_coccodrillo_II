@@ -86,4 +86,22 @@ describe('random world generator', () => {
       expect(value).toBeLessThan(1);
     }
   });
+
+  it('scatters trees and rocks across the random route', () => {
+    const level = generateRandomLevel(42);
+    const decorations = level.decorations ?? [];
+
+    expect(decorations.length).toBeGreaterThan(8);
+    expect(decorations.filter((item) => item.kind === 'tree').length).toBeGreaterThan(2);
+    expect(decorations.filter((item) => item.kind === 'rock').length).toBeGreaterThan(2);
+  });
+
+  it('nightmare packs in more creatures and ranged attackers', () => {
+    const middle = generateRandomLevel(42, 'middle');
+    const nightmare = generateRandomLevel(42, 'nightmare');
+
+    expect(nightmare.enemies.length).toBeGreaterThan(middle.enemies.length);
+    expect(nightmare.enemies.filter((enemy) => enemy.ranged === true).length).toBeGreaterThan(0);
+    expect(middle.enemies.filter((enemy) => enemy.ranged === true)).toHaveLength(0);
+  });
 });

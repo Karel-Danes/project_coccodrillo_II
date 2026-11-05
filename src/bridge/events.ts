@@ -35,6 +35,8 @@ export type GameEvents = {
   bossIntro: (kind: EnemyKind) => void;
   /** The boss fired a projectile. */
   bossShot: () => void;
+  /** A ranged nightmare creature fired a bolt. */
+  enemyShot: () => void;
   /** The world's boss has been defeated. */
   bossDefeated: (kind: EnemyKind) => void;
   /** A ranged hero launched lightning or an axe. */

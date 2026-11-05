@@ -36,6 +36,14 @@ describe('random world generator', () => {
     }
   });
 
+  it('can force a specific boss for the rotation deck', () => {
+    for (const kind of RANDOM_BOSSES) {
+      const level = generateRandomLevel(42, 'middle', kind);
+      const boss = level.enemies.find((enemy) => enemy.boss === true);
+      expect(boss?.kind).toBe(kind);
+    }
+  });
+
   it('keeps ground enemies on solid floor and pits narrow enough to jump', () => {
     const level = generateRandomLevel(2026);
 

@@ -7,6 +7,8 @@ import {
   isBossKind,
   isCharacterKind,
   isWorldMode,
+  RANDOM_BOSSES,
+  type BossKind,
 } from '../../game/characters';
 import { CAMPAIGN_LEVEL } from '../../game/campaign';
 import {
@@ -91,6 +93,46 @@ const DEFAULT_CONFIG: GameConfig = {
   difficulty: DEFAULT_DIFFICULTY,
   flyIn: false,
 };
+
+const BOSS_DECK_KEY = 'coccodrillo.bossDeck';
+
+function shuffledBossDeck(): BossKind[] {
+  const deck = [...RANDOM_BOSSES];
+  for (let index = deck.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    const a = deck[index];
+    const b = deck[swap];
+    deck[index] = b!;
+    deck[swap] = a!;
+  }
+  return deck;
+}
+
+/**
+ * Draws from a persisted shuffled deck so a short random session still sees
+ * each boss before any repeats. Seeded dev URLs keep their deterministic boss.
+ */
+function nextRandomBoss(): BossKind | undefined {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+  try {
+    const raw = window.localStorage.getItem(BOSS_DECK_KEY);
+    let deck: BossKind[] = raw ? (JSON.parse(raw) as BossKind[]) : [];
+    if (
+      !Array.isArray(deck) ||
+      deck.length === 0 ||
+      deck.some((kind) => !RANDOM_BOSSES.includes(kind))
+    ) {
+      deck = shuffledBossDeck();
+    }
+    const chosen = deck.pop() ?? RANDOM_BOSSES[0];
+    window.localStorage.setItem(BOSS_DECK_KEY, JSON.stringify(deck));
+    return chosen;
+  } catch {
+    return undefined;
+  }
+}
 
 type EnemyView = {
   sprite: Phaser.GameObjects.Sprite;
@@ -260,9 +302,14 @@ function resolveCampaignLevel(): Level {
 
 function resolveLevel(config: GameConfig): Level {
   if (config.worldMode === 'random') {
+    const seeded =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has('seed');
+    const bossOverride = seeded ? undefined : nextRandomBoss();
     const level = generateRandomLevel(
       config.seed ?? randomSeed(),
       config.difficulty,
+      bossOverride,
     );
     if (typeof window === 'undefined') {
       return level;

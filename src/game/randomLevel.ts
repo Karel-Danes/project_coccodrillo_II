@@ -57,6 +57,7 @@ type Platform = {
 export function generateRandomLevel(
   seed = randomSeed(),
   difficulty: Difficulty = DEFAULT_DIFFICULTY,
+  bossKindOverride?: BossKind,
 ): Level {
   const rng = createSeededRandom(seed);
   const tuning = difficultyDefinition(difficulty);
@@ -391,7 +392,8 @@ export function generateRandomLevel(
     });
   }
 
-  const bossKind: BossKind = pick(rng, RANDOM_BOSSES);
+  const bossKind: BossKind =
+    bossKindOverride ?? pick(rng, RANDOM_BOSSES);
   const bossStats = statsFor(bossKind);
   const bossX = 88 * TILE_SIZE + (TILE_SIZE - bossStats.width) / 2;
   enemies.push({

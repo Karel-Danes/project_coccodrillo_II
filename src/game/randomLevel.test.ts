@@ -27,15 +27,12 @@ describe('random world generator', () => {
     expect(tileAt(level, spawnCol, 15)).toBe('empty');
   });
 
-  it('always ends with exactly one random boss', () => {
+  it('always includes exactly one random boss', () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       const level = generateRandomLevel(seed);
       const bosses = level.enemies.filter((enemy) => enemy.boss === true);
       expect(bosses).toHaveLength(1);
       expect(RANDOM_BOSSES).toContain(bosses[0]?.kind);
-      expect(bosses[0]?.kind).toBe(
-        level.enemies[level.enemies.length - 1]?.kind,
-      );
     }
   });
 
@@ -132,5 +129,35 @@ describe('random world generator', () => {
       }
       expect((level.islands ?? []).length).toBeGreaterThanOrEqual(6);
     }
+  });
+
+  it('adds some wide, high, long-haul islands', () => {
+    const level = generateRandomLevel(42);
+    const islands = level.islands ?? [];
+
+    expect(islands.some((island) => island.width >= 160)).toBe(true);
+    expect(islands.some((island) => island.travel >= 180)).toBe(true);
+    expect(
+      islands.some((island) => island.y <= 16 * level.tileSize - 128),
+    ).toBe(true);
+  });
+
+  it('builds a hidden sky room with paired doors and skill sigils', () => {
+    const level = generateRandomLevel(42);
+    const teleports = level.teleports ?? [];
+    expect(teleports).toHaveLength(2);
+    expect(teleports[0]?.targetId).toBe(teleports[1]?.id);
+    expect(teleports[1]?.targetId).toBe(teleports[0]?.id);
+
+    const skyDoor = teleports.find((portal) => portal.y < 600);
+    expect(skyDoor).toBeDefined();
+    const col = Math.floor((skyDoor?.x ?? 0) / level.tileSize);
+    expect(tileAt(level, col, 5)).toBe('solid');
+    expect(tileAt(level, col, 2)).toBe('solid');
+
+    const skills = level.pickups.filter(
+      (pickup) => pickup.kind === 'skill',
+    );
+    expect(skills.length).toBeGreaterThanOrEqual(3);
   });
 });

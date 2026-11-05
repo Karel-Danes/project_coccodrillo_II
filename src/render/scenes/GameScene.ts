@@ -45,6 +45,8 @@ import type {
   PlayerState,
   Projectile,
   ProjectileKind,
+  SkillKind,
+  Teleport,
 } from '../../game/types';
 import {
   ENEMY_ART,
@@ -269,6 +271,7 @@ export class GameScene extends Phaser.Scene {
 
   private pickupViews: PickupView[] = [];
   private islandViews: Phaser.GameObjects.Graphics[] = [];
+  private teleportViews: Phaser.GameObjects.Graphics[] = [];
   private heartHud: Phaser.GameObjects.Image[] = [];
   private coinText!: Phaser.GameObjects.Text;
   private guardBadge!: Phaser.GameObjects.Image;
@@ -342,6 +345,7 @@ export class GameScene extends Phaser.Scene {
     this.enemyViews = [];
     this.pickupViews = [];
     this.islandViews = [];
+    this.teleportViews = [];
     this.projectileViews = [];
     this.heartHud = [];
     this.bannerText = null;
@@ -417,6 +421,9 @@ export class GameScene extends Phaser.Scene {
     this.islandViews = this.simulation.state.islands.map(() =>
       this.add.graphics().setDepth(4),
     );
+    this.teleportViews = this.simulation.state.teleports.map(() =>
+      this.add.graphics().setDepth(6),
+    );
     this.drawSpikes(level);
 
     // A cool moon over the desert night.
@@ -485,6 +492,9 @@ export class GameScene extends Phaser.Scene {
       } else if (pickup.kind === 'artifact') {
         texture = 'guard-artifact';
         scale = 1.2;
+      } else if (pickup.kind === 'skill') {
+        texture = 'boss-glow';
+        scale = 0.09;
       }
 
       const sprite = this.add
@@ -498,6 +508,20 @@ export class GameScene extends Phaser.Scene {
         sprite.play('heart-pulse');
       } else if (pickup.kind === 'well') {
         sprite.setBlendMode(Phaser.BlendModes.ADD);
+      } else if (pickup.kind === 'skill') {
+        const color =
+          pickup.skill === 'melee'
+            ? 0xffb36a
+            : pickup.skill === 'ranged'
+              ? 0x8fe8ff
+              : 0xff86b8;
+        sprite.setBlendMode(Phaser.BlendModes.ADD).setTint(color);
+
+        const x = pickup.position.x;
+        const y = pickup.position.y + 30;
+        base = this.add.graphics().setDepth(2);
+        base.fillStyle(0x161d29, 0.9).fillEllipse(x, y, 68, 20);
+        base.lineStyle(2, color, 0.85).strokeEllipse(x, y, 68, 20);
       }
 
       if (pickup.kind === 'well' || pickup.kind === 'artifact') {
@@ -533,12 +557,12 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.heartHud = [];
-    // Enough slots for the Orc's six starting hearts plus the relic bonus.
-    for (let i = 0; i < 9; i += 1) {
+    // Enough slots for the Orc's relic and sky-room vitality sigils.
+    for (let i = 0; i < 12; i += 1) {
       this.heartHud.push(
         this.addHud(
           this.add
-            .image(34 + i * 46, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
+            .image(34 + i * 42, 152, HEART_KEYS[0] ?? 'pickup-heart-0')
             .setScrollFactor(0)
             .setDepth(22)
             .setScale(1),
@@ -764,6 +788,7 @@ export class GameScene extends Phaser.Scene {
     this.bus.on('bossDefeated', this.onBossDefeated, this);
     this.bus.on('spellBounced', this.onSpellBounced, this);
     this.bus.on('berserkStarted', this.onBerserkStarted, this);
+    this.bus.on('teleported', this.onTeleported, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.bus.off('playerDied', this.onPlayerDied, this);
@@ -778,6 +803,7 @@ export class GameScene extends Phaser.Scene {
       this.bus.off('bossDefeated', this.onBossDefeated, this);
       this.bus.off('spellBounced', this.onSpellBounced, this);
       this.bus.off('berserkStarted', this.onBerserkStarted, this);
+      this.bus.off('teleported', this.onTeleported, this);
       keyboard.off('keydown', this.unlockAudio, this);
       this.input.off('pointerdown', this.unlockAudio, this);
       this.touchControls?.destroy();
@@ -853,7 +879,12 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(120, 0.003);
   }
 
-  private onPickupCollected(kind: PickupKind): void {
+  private onPickupCollected(
+    kind: PickupKind,
+    _hp: number,
+    _coins: number,
+    skill?: SkillKind,
+  ): void {
     if (kind === 'coin') {
       this.sfx.coin();
     } else if (kind === 'artifact') {
@@ -867,6 +898,15 @@ export class GameScene extends Phaser.Scene {
             : 'DEFENCE BUBBLE UNLOCKED';
       this.showBanner(message);
       this.touchControls?.setGuardVisible(true);
+    } else if (kind === 'skill') {
+      this.sfx.heal();
+      this.showBanner(
+        skill === 'ranged'
+          ? 'STORM SIGIL · +2 RANGED'
+          : skill === 'vitality'
+            ? 'VITALITY SIGIL · +2 LIFE'
+            : 'BLADE SIGIL · +2 MELEE',
+      );
     } else {
       this.sfx.heal();
     }
@@ -887,6 +927,13 @@ export class GameScene extends Phaser.Scene {
   private onBerserkStarted(): void {
     this.sfx.berserk();
     this.cameras.main.shake(180, 0.004);
+  }
+
+  private onTeleported(by: 'player' | 'enemy'): void {
+    this.sfx.teleport();
+    if (by === 'player') {
+      this.cameras.main.flash(180, 210, 235, 255);
+    }
   }
 
   private showBanner(message: string): void {
@@ -1500,12 +1547,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private render(): void {
-    const { player, enemies, pickups, projectiles, islands, mode, bossKind } =
+    const { player, enemies, pickups, projectiles, islands, teleports, mode, bossKind } =
       this.simulation.state;
 
     this.renderPlayer(player);
     this.renderEnemies(enemies);
     this.renderIslands(islands);
+    this.renderTeleports(teleports);
     this.renderPickups(pickups);
     this.renderProjectiles(projectiles);
     if (!this.endingActive) {
@@ -1631,6 +1679,51 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private renderTeleports(teleports: readonly Teleport[]): void {
+    const pulse = 1 + Math.sin(this.time.now / 260) * 0.06;
+
+    teleports.forEach((portal, index) => {
+      let view = this.teleportViews[index];
+      if (!view) {
+        view = this.add.graphics().setDepth(6);
+        this.teleportViews[index] = view;
+      }
+
+      const color = portal.y > 600 ? 0x8fd0ff : 0xe8c77a;
+      const x = portal.x;
+      const y = portal.y;
+
+      view.clear();
+      view
+        .fillStyle(0x0b1118, 0.82)
+        .fillEllipse(x, y, 76, 20);
+      view
+        .lineStyle(3, color, 0.9)
+        .strokeEllipse(x, y, 76, 20);
+      view
+        .fillStyle(color, 0.12)
+        .fillEllipse(x, y - 38, 46 * pulse, 84 * pulse);
+      view
+        .lineStyle(3, color, 0.8)
+        .strokeEllipse(x, y - 38, 46, 84);
+      view
+        .lineStyle(1, 0xffffff, 0.45)
+        .strokeEllipse(x, y - 38, 28, 62);
+      view.fillStyle(color, 0.9).fillCircle(x, y - 38, 4);
+      view
+        .fillStyle(color, 0.7)
+        .fillTriangle(x, y - 15, x - 7, y - 3, x + 7, y - 3);
+    });
+
+    for (
+      let index = teleports.length;
+      index < this.teleportViews.length;
+      index += 1
+    ) {
+      this.teleportViews[index]?.setVisible(false);
+    }
+  }
+
   private renderPickups(pickups: readonly Pickup[]): void {
     pickups.forEach((pickup, index) => {
       const view = this.pickupViews[index];
@@ -1665,6 +1758,10 @@ export class GameScene extends Phaser.Scene {
       } else if (view.kind === 'well') {
         view.sprite.setScale(
           1.3 + Math.sin(this.time.now / 280 + view.phase) * 0.06,
+        );
+      } else if (view.kind === 'skill') {
+        view.sprite.setScale(
+          0.085 + Math.sin(this.time.now / 220 + view.phase) * 0.012,
         );
       }
 
@@ -1903,6 +2000,16 @@ export class GameScene extends Phaser.Scene {
         .beginPath()
         .arc(cx, cy, 54, start, end)
         .strokePath();
+
+      if (player.character === 'orcBrute') {
+        for (const offset of [-30, 30]) {
+          this.attackFx
+            .lineStyle(5, color, 0.5)
+            .beginPath()
+            .arc(cx, cy + offset, 56, start, end)
+            .strokePath();
+        }
+      }
     }
 
     for (const enemy of enemies) {

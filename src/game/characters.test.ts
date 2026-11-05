@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CHARACTERS } from './characters';
 import { parseLevel } from './level';
-import { createPlayer, PLAYER_HEIGHT } from './player';
+import {
+  ATTACK_STARTUP,
+  createPlayer,
+  getAttackHitbox,
+  PLAYER_HEIGHT,
+} from './player';
 import { Simulation } from './simulation';
 import type { EnemySpawn, InputState, Level } from './types';
 
@@ -62,6 +67,43 @@ describe('character rulebook', () => {
     expect(projectile?.kind).toBe('lightning');
     expect(projectile?.owner).toBe('player');
     expect(projectile?.damage).toBe(3);
+  });
+
+  it('aims the Mage bolt down far enough to hit a slime', () => {
+    const level = flatLevel([
+      {
+        kind: 'slime',
+        x: 420,
+        y: 40,
+        patrolMinX: 400,
+        patrolMaxX: 460,
+      },
+    ]);
+    const simulation = new Simulation(level, { character: 'mage' });
+    for (let i = 0; i < 12; i += 1) {
+      simulation.step();
+    }
+
+    simulation.setInput({ ...NO_INPUT, rangedHeld: true });
+    for (let i = 0; i < 90; i += 1) {
+      simulation.step();
+    }
+
+    const slime = simulation.state.enemies[0]!;
+    expect(slime.hp).toBeLessThan(slime.maxHp);
+  });
+
+  it('gives the Orc a tall vertical slash hitbox', () => {
+    const orc = {
+      ...createPlayer({ x: 0, y: 0 }, 'orcBrute'),
+      state: 'attack' as const,
+      attackKind: 'melee' as const,
+      stateTime: ATTACK_STARTUP + 0.01,
+    };
+    const hitbox = getAttackHitbox(orc);
+    expect(hitbox).not.toBeNull();
+    expect(hitbox!.height).toBeGreaterThanOrEqual(100);
+    expect(hitbox!.height).toBeGreaterThan(hitbox!.width);
   });
 
   it('does not let the Orc throw axes outside berserk', () => {

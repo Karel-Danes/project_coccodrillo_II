@@ -16,6 +16,7 @@ import {
   statsFor,
   stepEnemy,
 } from './enemy';
+import { tileAt } from './level';
 import { FIXED_DT_SECONDS } from './loop';
 import { moveAndCollide, overlaps } from './physics';
 import { pickupBounds } from './pickup';
@@ -45,6 +46,7 @@ import {
   touchesSpikes,
 } from './player';
 import type {
+  AABB,
   CharacterKind,
   DeathReason,
   Difficulty,
@@ -62,6 +64,8 @@ import type {
   Player,
   Projectile,
   ProjectileKind,
+  SkillKind,
+  Teleport,
   Vec2,
   WorldMode,
 } from './types';
@@ -78,6 +82,7 @@ export type GameEvent =
       kind: PickupKind;
       hp: number;
       coins: number;
+      skill?: SkillKind;
     }
   | { type: 'bossIntro'; kind: EnemyKind }
   | { type: 'bossShot' }
@@ -85,7 +90,8 @@ export type GameEvent =
   | { type: 'playerRanged'; kind: ProjectileKind }
   | { type: 'enemyShot' }
   | { type: 'spellBounced' }
-  | { type: 'berserkStarted' };
+  | { type: 'berserkStarted' }
+  | { type: 'teleported'; by: 'player' | 'enemy' };
 
 const NO_EVENTS: readonly GameEvent[] = [];
 
@@ -128,8 +134,10 @@ export class Simulation {
   private pickups: Pickup[];
   private projectiles: Projectile[] = [];
   private islands: FloatingIsland[];
+  private teleports: Teleport[];
   private islandClock = 0;
   private playerIslandId: number | null = null;
+  private playerPortalLocked = false;
   private coins = 0;
   private status: GameStatus = 'playing';
   private mode: GameMode = 'play';
@@ -181,6 +189,11 @@ export class Simulation {
       kind: spawn.kind,
       position: { x: spawn.x, y: spawn.y },
       collected: false,
+      skill: spawn.skill,
+    }));
+
+    this.teleports = (level.teleports ?? []).map((spawn) => ({
+      ...spawn,
     }));
 
     this.islands = (level.islands ?? []).map((spawn, id) => {
@@ -205,6 +218,7 @@ export class Simulation {
       pickups: this.pickups,
       projectiles: this.projectiles,
       islands: this.islands,
+      teleports: this.teleports,
       coins: this.coins,
       character: this.character,
       worldMode: this.worldMode,
@@ -382,6 +396,160 @@ export class Simulation {
     };
   }
 
+  private teleportBounds(portal: Teleport): AABB {
+    return {
+      x: portal.x - 30,
+      y: portal.y - 76,
+      width: 60,
+      height: 76,
+    };
+  }
+
+  private portalFor(box: AABB): Teleport | undefined {
+    return this.teleports.find((portal) =>
+      overlaps(box, this.teleportBounds(portal)),
+    );
+  }
+
+  private resolvePlayerTeleport(player: Player): {
+    player: Player;
+    used: boolean;
+  } {
+    const playerBox = {
+      x: player.position.x,
+      y: player.position.y,
+      width: PLAYER_WIDTH,
+      height: PLAYER_HEIGHT,
+    };
+    const here = this.portalFor(playerBox);
+
+    if (this.playerPortalLocked) {
+      if (!here) {
+        this.playerPortalLocked = false;
+      }
+      return { player, used: false };
+    }
+
+    if (!here) {
+      return { player, used: false };
+    }
+
+    const destination = this.teleports.find(
+      (portal) => portal.id === here.targetId,
+    );
+    if (!destination) {
+      return { player, used: false };
+    }
+
+    this.playerPortalLocked = true;
+    this.playerIslandId = null;
+    return {
+      player: {
+        ...player,
+        position: {
+          x: destination.x - PLAYER_WIDTH / 2,
+          y: destination.y - PLAYER_HEIGHT,
+        },
+        velocity: { x: 0, y: 0 },
+        grounded: true,
+        state: 'idle',
+        stateTime: 0,
+      },
+      used: true,
+    };
+  }
+
+  private resolveEnemyTeleports(): boolean {
+    let used = false;
+
+    this.enemies = this.enemies.map((enemy) => {
+      if (enemy.state === 'die') {
+        return enemy;
+      }
+
+      const here = this.portalFor(enemyBounds(enemy));
+      if (enemy.portalLocked) {
+        return here ? enemy : { ...enemy, portalLocked: false };
+      }
+
+      if (!here || enemy.state === 'hurt') {
+        return enemy;
+      }
+
+      const destination = this.teleports.find(
+        (portal) => portal.id === here.targetId,
+      );
+      if (!destination) {
+        return enemy;
+      }
+
+      const stats = statsFor(enemy.kind);
+      const floorRow = Math.floor(destination.y / this.level.tileSize);
+      const landingX = destination.x - stats.width / 2 + 64;
+      const col = Math.floor(landingX / this.level.tileSize);
+      let left = col;
+      let right = col;
+      while (tileAt(this.level, left - 1, floorRow) === 'solid') {
+        left -= 1;
+      }
+      while (tileAt(this.level, right + 1, floorRow) === 'solid') {
+        right += 1;
+      }
+
+      used = true;
+      return {
+        ...enemy,
+        position: {
+          x: landingX,
+          y: destination.y - stats.height,
+        },
+        velocity: { x: 0, y: 0 },
+        homeX: landingX,
+        homeY: destination.y - stats.height,
+        grounded: stats.behavior !== 'flying',
+        state: 'idle' as const,
+        stateTime: 0,
+        portalLocked: true,
+        patrolMinX: left * this.level.tileSize + 8,
+        patrolMaxX:
+          (right + 1) * this.level.tileSize - stats.width - 8,
+      };
+    });
+
+    return used;
+  }
+
+  private rangedTargetFor(player: Player): Vec2 | undefined {
+    if (player.character !== 'mage') {
+      return undefined;
+    }
+
+    const origin = playerCentre(player);
+    let best: Vec2 | undefined;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const enemy of this.enemies) {
+      if (enemy.state === 'die') {
+        continue;
+      }
+      const stats = statsFor(enemy.kind);
+      const x = enemy.position.x + stats.width / 2;
+      const y = enemy.position.y + stats.height / 2;
+      const dx = (x - origin.x) * player.facing;
+      const dy = y - origin.y;
+      if (dx < -12 || dx > 620 || Math.abs(dy) > 220) {
+        continue;
+      }
+      const distance = Math.hypot(dx, dy);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x, y };
+      }
+    }
+
+    return best;
+  }
+
   /**
    * Advances one 60 Hz step and returns the domain events it produced.
    * A dead, cinematic, or won simulation is inert until restarted.
@@ -421,6 +589,9 @@ export class Simulation {
     // A standing enemy is a solid obstacle for the player's body.
     player = keepPlayerOutOfEnemies(player, this.enemies);
     player = this.resolveIslands(player, previousPlayer);
+    const teleportResult = this.resolvePlayerTeleport(player);
+    player = teleportResult.player;
+    const playerTeleported = teleportResult.used;
 
     let reason: DeathReason | null = null;
     if (touchesSpikes(this.level, player)) {
@@ -442,6 +613,9 @@ export class Simulation {
 
     const events: GameEvent[] = [];
     const tuning = difficultyDefinition(this.difficulty);
+    if (playerTeleported) {
+      events.push({ type: 'teleported', by: 'player' });
+    }
     const playerBox = {
       x: player.position.x,
       y: player.position.y,
@@ -476,6 +650,31 @@ export class Simulation {
         events.push({
           type: 'pickupCollected',
           kind: 'artifact',
+          hp: player.hp,
+          coins: this.coins,
+        });
+        continue;
+      }
+
+      if (pickup.kind === 'skill') {
+        pickup.collected = true;
+        const skill = pickup.skill ?? 'melee';
+        if (skill === 'melee') {
+          player = { ...player, bonusMelee: player.bonusMelee + 2 };
+        } else if (skill === 'ranged') {
+          player = { ...player, bonusRanged: player.bonusRanged + 2 };
+        } else {
+          const maxHp = player.maxHp + 2;
+          player = {
+            ...player,
+            maxHp,
+            hp: Math.min(maxHp, player.hp + 2),
+          };
+        }
+        events.push({
+          type: 'pickupCollected',
+          kind: 'skill',
+          skill,
           hp: player.hp,
           coins: this.coins,
         });
@@ -530,15 +729,17 @@ export class Simulation {
       const centre = playerCentre(player);
       const kind =
         player.character === 'mage' ? 'lightning' : 'axe';
+      const target = this.rangedTargetFor(player);
       this.projectiles.push(
         createPlayerProjectile(
           kind,
           {
             x: centre.x + player.facing * 22,
-            y: centre.y - 8,
+            y: centre.y + (kind === 'axe' ? 4 : 0),
           },
           player.facing,
           getRangedDamage(player),
+          target,
         ),
       );
       events.push({ type: 'playerRanged', kind });
@@ -555,6 +756,10 @@ export class Simulation {
         dtSeconds: FIXED_DT_SECONDS,
       }),
     );
+
+    if (this.resolveEnemyTeleports()) {
+      events.push({ type: 'teleported', by: 'enemy' });
+    }
 
     // Boss intro: freeze everything and hand control to the cutscene.
     if (!this.bossIntroShown) {

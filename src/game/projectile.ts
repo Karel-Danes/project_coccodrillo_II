@@ -114,11 +114,14 @@ export function createPlayerProjectile(
   from: Vec2,
   facing: -1 | 1,
   damage: number,
+  target?: Vec2,
 ): Projectile {
   if (kind === 'lightning') {
     return projectile(
       from,
-      { x: facing * LIGHTNING_SPEED, y: 0 },
+      target === undefined
+        ? { x: facing * LIGHTNING_SPEED, y: 0 }
+        : velocityToward(from, target, LIGHTNING_SPEED),
       'lightning',
       'player',
       damage,

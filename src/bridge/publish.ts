@@ -35,6 +35,7 @@ export function publishEvents(
           event.kind,
           event.hp,
           event.coins,
+          event.skill,
         );
         break;
       case 'bossIntro':
@@ -57,6 +58,9 @@ export function publishEvents(
         break;
       case 'berserkStarted':
         bus.emit('berserkStarted');
+        break;
+      case 'teleported':
+        bus.emit('teleported', event.by);
         break;
     }
   }

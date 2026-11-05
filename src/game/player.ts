@@ -80,6 +80,8 @@ export function createPlayer(
     attackKind: 'melee',
     rangedCooldown: 0,
     rangedStarted: false,
+    bonusMelee: 0,
+    bonusRanged: 0,
     berserkTime: 0,
     berserkCooldown: 0,
     berserkStarted: false,
@@ -153,11 +155,17 @@ export function isBerserk(player: Player): boolean {
 }
 
 export function getMeleeDamage(player: Player): number {
-  return characterDefinition(player.character).meleeDamage;
+  return (
+    characterDefinition(player.character).meleeDamage +
+    player.bonusMelee
+  );
 }
 
 export function getRangedDamage(player: Player): number {
-  return characterDefinition(player.character).rangedDamage;
+  return (
+    characterDefinition(player.character).rangedDamage +
+    player.bonusRanged
+  );
 }
 
 function horizontalIntent(input: InputState): -1 | 0 | 1 {
@@ -411,6 +419,8 @@ export function stepPlayer(player: Player, context: PlayerStepContext): Player {
     attackKind,
     rangedCooldown,
     rangedStarted,
+    bonusMelee: player.bonusMelee,
+    bonusRanged: player.bonusRanged,
     berserkTime,
     berserkCooldown,
     berserkStarted,
@@ -440,14 +450,15 @@ export function getAttackHitbox(player: Player): AABB | null {
     return null;
   }
 
+  const definition = characterDefinition(player.character);
   return {
     x:
       player.facing === 1
         ? player.position.x + PLAYER_WIDTH
-        : player.position.x - ATTACK_REACH,
-    y: player.position.y + ATTACK_OFFSET_Y,
-    width: ATTACK_REACH,
-    height: ATTACK_HEIGHT,
+        : player.position.x - definition.meleeReach,
+    y: player.position.y + definition.meleeOffsetY,
+    width: definition.meleeReach,
+    height: definition.meleeHeight,
   };
 }
 

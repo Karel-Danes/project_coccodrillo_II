@@ -58,6 +58,10 @@ export type CharacterDefinition = {
   rangedDamage: number;
   /** Only the Orc's rage unlocks his axe throw. */
   rangedRequiresBerserk: boolean;
+  /** Melee hitbox dimensions. */
+  meleeReach: number;
+  meleeHeight: number;
+  meleeOffsetY: number;
   meleeName: string | null;
   rangedName: string | null;
   basicAbility: string;
@@ -105,15 +109,21 @@ export type Enemy = {
   ranged: boolean;
   rangedCooldown: number;
   rangedDamage: number;
+  /** Prevents a freshly teleported enemy from bouncing straight back. */
+  portalLocked: boolean;
 };
 
-export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact';
+export type PickupKind = 'heart' | 'coin' | 'well' | 'artifact' | 'skill';
+
+export type SkillKind = 'melee' | 'ranged' | 'vitality';
 
 export type PickupSpawn = {
   kind: PickupKind;
   /** Centre of the pickup, in world pixels. */
   x: number;
   y: number;
+  /** Only present for `skill` pickups. */
+  skill?: SkillKind;
 };
 
 export type Pickup = {
@@ -121,6 +131,7 @@ export type Pickup = {
   /** Centre of the pickup, in world pixels. */
   position: Vec2;
   collected: boolean;
+  skill?: SkillKind;
 };
 
 export type DecorationKind = 'tree' | 'rock';
@@ -156,6 +167,17 @@ export type FloatingIsland = FloatingIslandSpawn & {
   velocityX: number;
 };
 
+export type TeleportSpawn = {
+  id: number;
+  /** The door this one leads to. */
+  targetId: number;
+  /** Centre x and floor line y. */
+  x: number;
+  y: number;
+};
+
+export type Teleport = TeleportSpawn;
+
 export type Level = {
   cols: number;
   rows: number;
@@ -170,6 +192,8 @@ export type Level = {
   decorations?: readonly DecorationSpawn[];
   /** Moving one-way taxi islands. */
   islands?: readonly FloatingIslandSpawn[];
+  /** Paired doors between the ground and hidden sky rooms. */
+  teleports?: readonly TeleportSpawn[];
 };
 
 export type Player = {
@@ -194,6 +218,9 @@ export type Player = {
   rangedCooldown: number;
   /** True for the one step on which a ranged shot left the hand. */
   rangedStarted: boolean;
+  /** Permanent sky-room sigil bonuses. */
+  bonusMelee: number;
+  bonusRanged: number;
   /** Orc berserk remaining time, in seconds. */
   berserkTime: number;
   berserkCooldown: number;
@@ -244,6 +271,7 @@ export type GameState = {
   pickups: readonly Pickup[];
   projectiles: readonly Projectile[];
   islands: readonly FloatingIsland[];
+  teleports: readonly Teleport[];
   coins: number;
   character: CharacterKind;
   worldMode: WorldMode;

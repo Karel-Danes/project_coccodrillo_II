@@ -15,6 +15,8 @@ import type {
   FloatingIslandSpawn,
   Level,
   PickupSpawn,
+  SkillKind,
+  TeleportSpawn,
 } from './types';
 
 const COLS = 96;
@@ -223,7 +225,7 @@ export function generateRandomLevel(
   // drift horizontally, carrying anyone standing on them. Candidate lanes
   // are rejected if the island body would pass through a solid ledge.
   const islands: FloatingIslandSpawn[] = [];
-  const islandCount = 9 + Math.floor(rng() * 3);
+  const islandCount = 10 + Math.floor(rng() * 3);
   const islandMinX = 4 * TILE_SIZE;
   const islandMaxX = 78 * TILE_SIZE;
   const islandSlot = (islandMaxX - islandMinX) / islandCount;
@@ -255,14 +257,14 @@ export function generateRandomLevel(
     let placed = false;
 
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      const width = 96 + Math.floor(rng() * 3) * 32;
-      const heightOptions = [64, 64, 88, 88, 128] as const;
+      const width = 96 + Math.floor(rng() * 5) * 32;
+      const heightOptions = [64, 64, 88, 88, 128, 128, 176, 224] as const;
       const height =
         heightOptions[Math.floor(rng() * heightOptions.length)] ?? 64;
       const high = height > 100;
       const travel = high
-        ? 120 + Math.floor(rng() * 4) * 35
-        : 70 + Math.floor(rng() * 4) * 25;
+        ? 180 + Math.floor(rng() * 4) * 45
+        : 90 + Math.floor(rng() * 4) * 30;
       const jitter = (rng() - 0.5) * islandSlot * 0.8;
       let baseX = slotCenter + jitter;
       baseX = Math.max(
@@ -280,7 +282,7 @@ export function generateRandomLevel(
         y,
         width,
         travel,
-        period: 4.5 + rng() * 3.5,
+        period: high ? 7 + rng() * 4 : 5 + rng() * 3,
         phase: rng(),
       });
       placed = true;
@@ -290,8 +292,8 @@ export function generateRandomLevel(
     // Sky-lane fallback: a high island is reachable from two-storey ledges
     // and keeps the route populated even when the low lane is blocked.
     if (!placed) {
-      const fallbackWidth = 96;
-      const fallbackTravel = 80;
+      const fallbackWidth = 128;
+      const fallbackTravel = 160;
       const fallbackY = groundY - 176;
       for (const offset of [0, -160, 160, -320, 320]) {
         let baseX = slotCenter + offset;
@@ -317,7 +319,7 @@ export function generateRandomLevel(
           y: fallbackY,
           width: fallbackWidth,
           travel: fallbackTravel,
-          period: 4.5 + rng() * 3.5,
+          period: 7 + rng() * 3,
           phase: rng(),
         });
         break;
@@ -434,6 +436,59 @@ export function generateRandomLevel(
     y: groundY - 40,
   });
 
+  // A hidden sky room, reachable only through paired teleport doors.
+  const portalGroundCol = safeGroundCol(18 + Math.floor(rng() * 10));
+  const roomWidth = 10 + Math.floor(rng() * 4);
+  const roomStart = 24 + Math.floor(rng() * 12);
+  const roomFloorRow = 5;
+  const roomCeilRow = 2;
+  const roomFloorY = roomFloorRow * TILE_SIZE;
+
+  for (let col = roomStart - 1; col <= roomStart + roomWidth; col += 1) {
+    grid[roomCeilRow]![col] = '#';
+    grid[roomFloorRow]![col] = '#';
+  }
+  for (let row = roomCeilRow; row <= roomFloorRow; row += 1) {
+    grid[row]![roomStart - 1] = '#';
+    grid[row]![roomStart + roomWidth] = '#';
+  }
+
+  const skills: SkillKind[] = ['melee', 'ranged', 'vitality'];
+  const skillCols = [
+    roomStart + 2,
+    roomStart + 4,
+    roomStart + roomWidth - 3,
+  ];
+  skills.forEach((skill, index) => {
+    pickups.push({
+      kind: 'skill',
+      skill,
+      x: (skillCols[index] ?? roomStart + 4) * TILE_SIZE,
+      y: roomFloorY - 38,
+    });
+  });
+
+  const groundDoorX = portalGroundCol * TILE_SIZE + TILE_SIZE / 2;
+  const skyDoorX =
+    (roomStart + Math.floor(roomWidth / 2)) * TILE_SIZE +
+    TILE_SIZE / 2;
+  const teleports: TeleportSpawn[] = [
+    { id: 0, targetId: 1, x: groundDoorX, y: groundY },
+    { id: 1, targetId: 0, x: skyDoorX, y: roomFloorY },
+  ];
+
+  // A door guard patrols the ground portal and, in practice, often rides it
+  // into the sky room. Any other enemy that wanders into a door follows.
+  const guardStats = statsFor('skeleton');
+  enemies.push({
+    kind: 'skeleton',
+    x: groundDoorX - guardStats.width / 2,
+    y: groundY - guardStats.height,
+    patrolMinX: groundDoorX - 110,
+    patrolMaxX: groundDoorX + 110,
+    ranged: tuning.rangedChance > 0 && rng() < 0.5,
+  });
+
   const rows = grid.map((row) => row.join(''));
   const level = parseLevel(rows, {
     tileSize: TILE_SIZE,
@@ -442,5 +497,5 @@ export function generateRandomLevel(
     pickups,
   });
 
-  return { ...level, decorations, islands };
+  return { ...level, decorations, islands, teleports };
 }

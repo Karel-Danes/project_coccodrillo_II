@@ -5,6 +5,7 @@ import type {
   PickupKind,
   Player,
   ProjectileKind,
+  SkillKind,
 } from '../game/types';
 
 /**
@@ -29,8 +30,13 @@ export type GameEvents = {
   enemyDied: (kind: EnemyKind) => void;
   /** A guard absorbed an enemy swing or spell. */
   attackBlocked: () => void;
-  /** A coin, heart, or well was consumed. */
-  pickupCollected: (kind: PickupKind, hp: number, coins: number) => void;
+  /** A coin, heart, well, or sky sigil was consumed. */
+  pickupCollected: (
+    kind: PickupKind,
+    hp: number,
+    coins: number,
+    skill?: SkillKind,
+  ) => void;
   /** The world's boss has seen the player; run the intro cutscene. */
   bossIntro: (kind: EnemyKind) => void;
   /** The boss fired a projectile. */
@@ -45,6 +51,8 @@ export type GameEvents = {
   spellBounced: () => void;
   /** The Orc's berserk mode started. */
   berserkStarted: () => void;
+  /** A player or enemy used a teleport door. */
+  teleported: (by: 'player' | 'enemy') => void;
 };
 
 export class GameEventBus extends EventEmitter<GameEvents> {}

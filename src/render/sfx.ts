@@ -147,6 +147,12 @@ export class Sfx {
     this.noise(0.4, 0.08, 260);
   }
 
+  teleport(): void {
+    this.tone(420, 1480, 0.35, 'sine', 0.08);
+    this.tone(880, 220, 0.4, 'triangle', 0.05, 0.06);
+    this.noise(0.18, 0.05, 2400);
+  }
+
   hit(): void {
     this.tone(190, 70, 0.15, 'square', 0.12);
     this.noise(0.09, 0.12, 600);
